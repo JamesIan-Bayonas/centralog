@@ -1,0 +1,6 @@
+@CentraLog.API_HostAddress = http://localhost:5162
+
+GET {{CentraLog.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

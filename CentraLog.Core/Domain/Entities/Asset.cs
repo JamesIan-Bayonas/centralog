@@ -1,0 +1,17 @@
+﻿using System;
+using CentraLog.Core.Domain.Enums;
+
+namespace CentraLog.Core.Domain.Entities;
+
+public class Asset
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string CategoryTag { get; set; } = string.Empty;
+    public decimal ProcurementCost { get; set; }
+    public int RoomId { get; set; }
+    public int CustodianId { get; set; }
+    public LifecycleState LifecycleState { get; set; } = LifecycleState.Procured;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
