@@ -18,10 +18,15 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Inject the Relational Database Context using an in-memory or connection string approach
+// Inject the Relational Database Context using Pomelo MySQL Configuration Engine
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")
-        ?? "Server=(localdb)\\mssqllocaldb;Database=CentraLogDb;Trusted_Connection=True;MultipleActiveResultSets=true"));
+    options.UseMySql(
+        connectionString,
+        new MySqlServerVersion(new Version(8, 0, 30)), // ◄── Bypasses live handshakes cleanly!
+        b => b.MigrationsAssembly("CentraLog.Infrastructure")
+    ));
 
 // S-Tier Clean Architecture Binding: Map Interface to its concrete implementation layer
 builder.Services.AddScoped<IAssetService, AssetService>();
@@ -59,6 +64,26 @@ app.UseHttpsRedirection();
 app.UseCors("CorsPolicy");
 
 app.UseAuthorization();
+
+// =========================================================================
+// 3. DATABASE SEEDING ENGINE DISPATCH
+// =========================================================================
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    try
+    {
+        var context = services.GetRequiredService<ApplicationDbContext>();
+        // Fire our custom seeding mechanism asynchronously
+        await DatabaseSeeder.SeedAsync(context);
+    }
+    catch (Exception ex)
+    {
+        var logger = services.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "An error occurred while initializing data seeding blocks.");
+    }
+}
+
 
 app.MapControllers();
 
