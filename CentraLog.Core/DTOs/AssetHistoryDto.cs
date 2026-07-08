@@ -1,4 +1,5 @@
-﻿using System;
+﻿using CentraLog.Core.Domain.Entities;
+using System;
 using System.Collections.Generic;
 
 namespace CentraLog.Core.DTOs
@@ -7,9 +8,9 @@ namespace CentraLog.Core.DTOs
     public class AssetHistoryDto
     {
         public int AssetId { get; set; }
-        public string AssetName { get; set; } = string.Empty;
-        public string CategoryTag { get; set; } = string.Empty;
-        public List<AuditLogTimelineEntryDto> Timeline { get; set; } = new();
+
+        // Aligns perfectly with the assignments executed in AssetService.cs
+        public List<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
     }
 
     // Individual timeline event slots

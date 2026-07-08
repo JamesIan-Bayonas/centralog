@@ -1,18 +1,17 @@
 ﻿using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
-namespace CentraLog.Core.DTOs;
-
-public record BulkTransferRequestDto
+namespace CentraLog.Core.DTOs
 {
-    [Required(ErrorMessage = "At least one target asset ID is required.")]
-    public List<int> AssetIds { get; init; } = [];
+    public class BulkTransferRequestDto
+    {
+        [Required(ErrorMessage = "The batch selection array cannot be empty.")]
+        public List<int> AssetIds { get; set; } = new();
 
-    [Required]
-    [Range(1, int.MaxValue, ErrorMessage = "A valid destination room ID is required.")]
-    public int DestinationRoomId { get; init; }
+        [Required(ErrorMessage = "Target destination location identifier is required.")]
+        public int DestinationRoomId { get; set; }
 
-    [Required]
-    [Range(1, int.MaxValue, ErrorMessage = "A valid new handler custodian ID is required.")]
-    public int NewCustodianId { get; init; }
+        [Required(ErrorMessage = "A target custodian handler assignment is required.")]
+        public int NewCustodianId { get; set; }
+    }
 }
