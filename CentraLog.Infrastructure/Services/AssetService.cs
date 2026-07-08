@@ -9,74 +9,269 @@ using CentraLog.Core.Domain.Enums;
 using CentraLog.Core.DTOs;
 using CentraLog.Core.Interfaces;
 using CentraLog.Infrastructure.Data;
+using CentraLog.Infrastructure.Services.Depreciation;
 
-namespace CentraLog.Infrastructure.Services;
-
-public class AssetService : IAssetService
+namespace CentraLog.Infrastructure.Services
 {
-    private readonly ApplicationDbContext _context;
-
-    public AssetService(ApplicationDbContext context)
+    public class AssetService : IAssetService
     {
-        _context = context;
-    }
+        private readonly ApplicationDbContext _context;
 
-    public async Task<bool> ExecuteBulkTransferAsync(BulkTransferRequestDto dto, int adminUserId, CancellationToken cancellationToken)
-    {
-        // Enforce strict transaction boundaries for database idempotency
-        using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
-
-        try
+        public AssetService(ApplicationDbContext context)
         {
-            // Fetch target assets checking runtime scope bounds
-            var assets = await _context.Assets
-                .Where(a => dto.AssetIds.Contains(a.Id))
-                .ToListAsync(cancellationToken);
+            _context = context;
+        }
 
-            if (assets.Count != dto.AssetIds.Count)
-                throw new KeyNotFoundException("One or more provided asset IDs could not be found in the system mapping database.");
+        public decimal CalculateDepreciatedValue(Asset asset, List<MaintenanceLog> logs)
+        {
+            IDepreciationStrategy strategy = asset.DepreciationMethod switch
+            {
+                DepreciationAlgorithm.DoubleDeclining => new DoubleDecliningStrategy(),
+                DepreciationAlgorithm.StraightLine or _ => new StraightLineStrategy()
+            };
 
-            var timestamp = DateTime.UtcNow;
+            return strategy.CalculateBookValue(asset, logs, DateTime.UtcNow);
+        }
+
+        public async Task<DashboardSummaryDto> GetDashboardSummaryAsync(CancellationToken cancellationToken = default)
+        {
+            var assets = await _context.Assets.ToListAsync(cancellationToken);
+            var allMaintenanceLogs = await _context.MaintenanceLogs.ToListAsync(cancellationToken);
+
+            decimal totalDepreciatedSystemValue = 0.00m;
 
             foreach (var asset in assets)
             {
-                // S-Tier Defensive Check: Guard against invalid immutable lifecycle states
-                if (asset.LifecycleState == LifecycleState.Disposed || asset.LifecycleState == LifecycleState.InMaintenance)
+                totalDepreciatedSystemValue += CalculateDepreciatedValue(asset, allMaintenanceLogs);
+            }
+
+            return new DashboardSummaryDto
+            {
+                TotalAssetCount = assets.Count,
+                TotalSystemValue = totalDepreciatedSystemValue,
+                ActiveCount = assets.Count(a => a.LifecycleState == LifecycleState.Active),
+                InMaintenanceCount = assets.Count(a => a.LifecycleState == LifecycleState.InMaintenance),
+                DisposedCount = assets.Count(a => a.LifecycleState == LifecycleState.Disposed)
+            };
+        }
+
+        public async Task<bool> ExecuteBulkTransferAsync(BulkTransferRequestDto dto, int adminUserId, CancellationToken cancellationToken = default)
+        {
+            using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                var timestamp = DateTime.UtcNow;
+
+                foreach (var assetId in dto.AssetIds)
                 {
-                    throw new InvalidOperationException($"Transfer rejected: Asset with ID {asset.Id} is currently in an unmodifiable state ({asset.LifecycleState}).");
+                    var asset = await _context.Assets.FirstOrDefaultAsync(a => a.Id == assetId, cancellationToken);
+                    if (asset == null) throw new KeyNotFoundException($"Transfer rejected: Asset {assetId} missing.");
+                    if (asset.LifecycleState == LifecycleState.Disposed || asset.LifecycleState == LifecycleState.InMaintenance)
+                    {
+                        await transaction.RollbackAsync(cancellationToken);
+                        throw new InvalidOperationException($"Transfer rejected: Asset {asset.Id} is un-relocatable.");
+                    }
+
+                    var auditLog = new AuditLog
+                    {
+                        AssetId = asset.Id,
+                        OldRoomId = asset.RoomId,
+                        NewRoomId = dto.DestinationRoomId,
+                        OldCustodianId = asset.CustodianId,
+                        NewCustodianId = dto.NewCustodianId,
+                        ModifiedByUserId = adminUserId,
+                        Timestamp = timestamp
+                    };
+
+                    asset.RoomId = dto.DestinationRoomId;
+                    asset.CustodianId = dto.NewCustodianId;
+                    asset.UpdatedAt = timestamp;
+
+                    await _context.AuditLogs.AddAsync(auditLog, cancellationToken);
                 }
 
-                // Stage compliance audit log entry tracking historical alterations
+                await _context.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return true;
+            }
+            catch (DbUpdateException)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw new TimeoutException("Database deadlock encountered.");
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
+        }
+
+        public async Task<bool> InitiateMaintenanceAsync(int assetId, InitiateMaintenanceCommandDto dto, int adminUserId, CancellationToken cancellationToken = default)
+        {
+            using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                var asset = await _context.Assets.FirstOrDefaultAsync(a => a.Id == assetId, cancellationToken);
+                if (asset == null) throw new KeyNotFoundException($"Asset {assetId} missing.");
+                if (asset.LifecycleState == LifecycleState.InMaintenance || asset.LifecycleState == LifecycleState.Disposed)
+                {
+                    throw new InvalidOperationException("Asset cannot enter repairs.");
+                }
+
+                var timestamp = DateTime.UtcNow;
+                var maintenanceLog = new MaintenanceLog
+                {
+                    AssetId = asset.Id,
+                    StartTime = timestamp,
+                    PerformedByUserId = adminUserId,
+                    ResolutionNotes = dto.IssueDescription,
+                    RepairCost = 0.00m
+                };
+
+                asset.LifecycleState = LifecycleState.InMaintenance;
+                asset.IsMaintenanceFlagged = false;
+                asset.UpdatedAt = timestamp;
+
+                await _context.MaintenanceLogs.AddAsync(maintenanceLog, cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return true;
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
+        }
+
+        public async Task<bool> ResolveMaintenanceActionAsync(int assetId, MaintenanceActionRequestDto dto, int adminUserId, CancellationToken cancellationToken = default)
+        {
+            using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                var asset = await _context.Assets.FirstOrDefaultAsync(a => a.Id == assetId, cancellationToken);
+                if (asset == null) throw new KeyNotFoundException($"Asset {assetId} missing.");
+
+                var timestamp = DateTime.UtcNow;
+                var activeLog = await _context.MaintenanceLogs
+                    .Where(m => m.AssetId == assetId && m.EndTime == null)
+                    .OrderByDescending(m => m.StartTime)
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                if (activeLog != null)
+                {
+                    activeLog.EndTime = timestamp;
+                    activeLog.ResolutionNotes = dto.ResolutionNotes;
+                    activeLog.RepairCost = dto.RepairCost;
+                    activeLog.PerformedByUserId = adminUserId;
+                }
+
+                asset.LifecycleState = LifecycleState.Active;
+                asset.UpdatedAt = timestamp;
+
+                await _context.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return true;
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
+        }
+
+        // =========================================================================
+        // SATISFIES CORE INTERFACE CONTRACT RECREATION FOR ASSET RETIREMENT
+        // =========================================================================
+        public async Task<bool> DisposeAssetAsync(int assetId, DisposeAssetCommandDto dto, int adminUserId, CancellationToken cancellationToken = default)
+        {
+            using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                var asset = await _context.Assets.FirstOrDefaultAsync(a => a.Id == assetId, cancellationToken);
+                if (asset == null) throw new KeyNotFoundException($"Asset {assetId} does not exist.");
+                if (asset.LifecycleState == LifecycleState.Disposed)
+                {
+                    throw new InvalidOperationException("Asset has already been decommissioned.");
+                }
+
+                var timestamp = DateTime.UtcNow;
+                asset.LifecycleState = LifecycleState.Disposed;
+                asset.UpdatedAt = timestamp;
+
                 var auditLog = new AuditLog
                 {
                     AssetId = asset.Id,
                     OldRoomId = asset.RoomId,
-                    NewRoomId = dto.DestinationRoomId,
+                    NewRoomId = asset.RoomId,
                     OldCustodianId = asset.CustodianId,
-                    NewCustodianId = dto.NewCustodianId,
+                    NewCustodianId = asset.CustodianId,
                     ModifiedByUserId = adminUserId,
                     Timestamp = timestamp
                 };
 
-                // Execute data mutations to the localized domain entity instances
-                asset.RoomId = dto.DestinationRoomId;
-                asset.CustodianId = dto.NewCustodianId;
-                asset.UpdatedAt = timestamp;
-
                 await _context.AuditLogs.AddAsync(auditLog, cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return true;
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
+        }
+
+        public async Task<Asset> GetAssetByIdAsync(int id, CancellationToken cancellationToken = default)
+        {
+            var asset = await _context.Assets.FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
+            if (asset == null) throw new KeyNotFoundException($"Asset with ID {id} does not exist.");
+            return asset;
+        }
+
+        public async Task<PagedResult<Asset>> GetFilteredAssetsAsync(GetAssetsQueryFilterDto filter, CancellationToken cancellationToken = default)
+        {
+            var query = _context.Assets.AsQueryable();
+            if (!string.IsNullOrEmpty(filter.SearchTerm))
+            {
+                query = query.Where(a => a.Name.Contains(filter.SearchTerm));
             }
 
-            // Commit transaction mutations atomically to persistent disk
-            await _context.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
+            int totalCount = await query.CountAsync(cancellationToken);
+            var items = await query.Skip((filter.PageNumber - 1) * filter.PageSize)
+                                   .Take(filter.PageSize)
+                                   .ToListAsync(cancellationToken);
 
-            return true;
+            // FIXED: Uses the matching parameterized constructor signature
+            return new PagedResult<Asset>(items, totalCount, filter.PageNumber, filter.PageSize);
         }
-        catch (Exception)
+
+        public async Task<AssetHistoryDto> GetAssetHistoryAsync(int id, CancellationToken cancellationToken = default)
         {
-            // Defensive rollback guarantees data integrity across timeouts or system errors
-            await transaction.RollbackAsync(cancellationToken);
-            throw;
+            var auditLogs = await _context.AuditLogs.Where(l => l.AssetId == id).ToListAsync(cancellationToken);
+
+            // FIXED: Binds collection array to matching internal history property name
+            return new AssetHistoryDto { AssetId = id, AuditLogs = auditLogs };
+        }
+
+        public async Task<int> ImportAssetBatchAsync(IEnumerable<ImportAssetRowDto> items, CancellationToken cancellationToken = default)
+        {
+            var timestamp = DateTime.UtcNow;
+            var assetsToInsert = items.Select(row => new Asset
+            {
+                Name = row.Name,
+                CategoryTag = row.CategoryTag,
+                ProcurementCost = row.ProcurementCost,
+                RoomId = row.RoomId,
+                CustodianId = row.CustodianId,
+                LifecycleState = LifecycleState.Procured,
+                CreatedAt = timestamp,
+                UpdatedAt = timestamp
+            }).ToList();
+
+            await _context.Assets.AddRangeAsync(assetsToInsert, cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+            return assetsToInsert.Count;
         }
     }
 }

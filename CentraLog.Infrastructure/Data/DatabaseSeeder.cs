@@ -40,6 +40,14 @@ namespace CentraLog.Infrastructure.Data
                         Email = "staff@centralog.com",
                         PasswordHash = ComputeSecureHash("StaffPass123!"),
                         Role = UserRole.InventoryStaff // Cleared to trigger UC-06 Calibration Hooks
+                    },
+                    // Add this entry directly inside the "new List<User>" array block in DatabaseSeeder.cs:
+                    new User
+                    {
+                        Username = "accountant_cl",
+                        Email = "accountant@centralog.com",
+                        PasswordHash = ComputeSecureHash("AccountantPass123!"),
+                        Role = UserRole.Accountant // Cleared to view Feature 7 balance sheet datasets
                     }
                 };
 
