@@ -1,177 +1,162 @@
 import { useState, useEffect } from 'react';
-import { api } from './services/api';
-import { Search, ShieldAlert, CheckCircle, RotateCw, Server, Package } from 'lucide-react';
+import { mockApi, type Asset, type DashboardSummary } from './services/api';
+import { Search, ShieldAlert, CheckCircle, RotateCw, Server, Package, Trash2, Layers, MapPin, Hash, DollarSign } from 'lucide-react';
 import './App.css';
-
-interface DashboardSummary {
-  totalAssetCount: number;
-  totalSystemValue: number;
-  activeCount: number;
-  inMaintenanceCount: number;
-  disposedCount: number;
-}
-
-interface Asset {
-  id: number;
-  name: string;
-  categoryTag: string;
-  procurementCost: number;
-  roomId: number;
-  custodianId: number;
-  lifecycleState: number;
-  isMaintenanceFlagged: boolean;
-}
 
 function App() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
 
-  // Fetch dashboard summary metrics
-  const fetchDashboardData = async () => {
-    try {
-      const summaryRes = await api.get('/assets/dashboard/summary');
-      setSummary(summaryRes.data);
-    } catch (err: any) {
-      console.error('Failed to pull dashboard metrics:', err);
-    }
+  const loadDashboardMetrics = async () => {
+    const data = await mockApi.getDashboardSummary();
+    setSummary(data);
   };
 
-  // Query assets based on active filter text parameters
-  const fetchAssetsList = async (search = '') => {
+  const loadAssetsList = async (search = '') => {
     setLoading(true);
-    setErrorMessage('');
-    try {
-      const endpoint = search ? `/assets/search?SearchTerm=${encodeURIComponent(search)}` : '/assets/search';
-      const res = await api.get(endpoint);
-      // Maps cleanly to PagedResult structural arrays returned by your backend
-      setAssets(res.data.items || []);
-    } catch (err: any) {
-      setErrorMessage(err.response?.data?.error || 'An error occurred fetching inventory records.');
-    } finally {
-      setLoading(false);
-    }
+    const data = await mockApi.searchAssets(search);
+    setAssets(data);
+    setLoading(false);
   };
 
   useEffect(() => {
-    fetchDashboardData();
-    fetchAssetsList();
+    loadDashboardMetrics();
+    loadAssetsList();
   }, []);
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
+  const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    fetchAssetsList(searchTerm);
+    loadAssetsList(searchTerm);
   };
 
-  const getLifecycleBadge = (state: number) => {
+  const getStatusBadge = (state: number, flagged: boolean) => {
+    if (flagged) return <span className="status-badge status-danger">Urgent Alert</span>;
     switch (state) {
-      case 2: return <span className="badge badge-active">Active</span>;
-      case 3: return <span className="badge badge-repair">In Maintenance</span>;
-      case 5: return <span className="badge badge-disposed">Disposed</span>;
-      default: return <span className="badge badge-neutral">Procured</span>;
+      case 2: return <span className="status-badge status-success">Active Fleet</span>;
+      case 3: return <span className="status-badge status-warning">In Repair Loop</span>;
+      case 5: return <span className="status-badge status-disposed">Disposed</span>;
+      default: return <span className="status-badge status-neutral">Procured</span>;
     }
   };
 
   return (
-    <div className="dashboard-container">
-      {/* Header Panel */}
-      <header className="main-header">
-        <div className="branding">
-          <Server className="brand-icon" />
-          <h1>CentraLog System Hub</h1>
+    <div className="app-workspace">
+      {/* Dynamic Navigation/Branding Header */}
+      <header className="workspace-header">
+        <div className="logo-section">
+          <div className="icon-frame">
+            <Server size={22} />
+          </div>
+          <div>
+            <h1>CentraLog</h1>
+            <span className="subtitle">Enterprise Resource Ledger • Standalone Mode</span>
+          </div>
         </div>
-        <button onClick={() => { fetchDashboardData(); fetchAssetsList(searchTerm); }} className="refresh-btn">
-          <RotateCw size={16} /> Refresh Core
+        <button onClick={() => { loadDashboardMetrics(); loadAssetsList(searchTerm); }} className="action-button secondary">
+          <RotateCw size={14} className={loading ? "spin" : ""} /> Sync Matrix
         </button>
       </header>
 
-      {/* Metrics Cards Strip */}
+      {/* Modern Dashboard Stats Grid */}
       {summary && (
-        <section className="metrics-grid">
-          <div className="metric-card">
-            <div className="metric-header">
-              <Package size={20} />
-              <h3>Total Capital Items</h3>
+        <section className="stats-container">
+          <div className="stat-card">
+            <div className="stat-info">
+              <span className="stat-label">Total Managed Inventory</span>
+              <span className="stat-number">{summary.totalAssetCount}</span>
             </div>
-            <p className="metric-value">{summary.totalAssetCount}</p>
+            <div className="stat-icon-wrapper purple"><Package size={24} /></div>
           </div>
-          <div className="metric-card">
-            <div className="metric-header">
-              <CheckCircle size={20} color="#10b981" />
-              <h3>Active Fleet</h3>
+          
+          <div className="stat-card">
+            <div className="stat-info">
+              <span className="stat-label">Operational Infrastructure</span>
+              <span className="stat-number text-success">{summary.activeCount}</span>
             </div>
-            <p className="metric-value">{summary.activeCount}</p>
+            <div className="stat-icon-wrapper green"><CheckCircle size={24} /></div>
           </div>
-          <div className="metric-card">
-            <div className="metric-header">
-              <ShieldAlert size={20} color="#f59e0b" />
-              <h3>In Repair Loops</h3>
+
+          <div className="stat-card">
+            <div className="stat-info">
+              <span className="stat-label">Flagged Maintenance Nodes</span>
+              <span className="stat-number text-warning">{summary.inMaintenanceCount}</span>
             </div>
-            <p className="metric-value">{summary.inMaintenanceCount}</p>
+            <div className="stat-icon-wrapper yellow"><ShieldAlert size={24} /></div>
           </div>
-          <div className="metric-card">
-            <div className="metric-header">
-              <h3>Total Evaluated Valuation</h3>
+
+          <div className="stat-card">
+            <div className="stat-info">
+              <span className="stat-label">Assessed Asset Value</span>
+              <span className="stat-number text-bright">₱{summary.totalSystemValue.toLocaleString()}</span>
             </div>
-            <p className="metric-value">₱{summary.totalSystemValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+            <div className="stat-icon-wrapper balance"><DollarSign size={24} /></div>
           </div>
         </section>
       )}
 
-      {/* Filter and Search Action Box */}
-      <section className="search-section">
-        <form onSubmit={handleSearchSubmit} className="search-bar">
-          <Search className="search-input-icon" size={18} />
-          <input 
-            type="text" 
-            placeholder="Search assets by description or identifier..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <button type="submit">Filter Fleet</button>
+      {/* Advanced Filter Workspace */}
+      <section className="filter-panel">
+        <form onSubmit={handleSearch} className="search-form">
+          <div className="input-group">
+            <Search size={18} className="search-icon" />
+            <input 
+              type="text" 
+              placeholder="Search assets by hardware descriptor, serial tag, or facility location..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <button type="submit" className="action-button primary">Execute Search</button>
         </form>
       </section>
 
-      {/* Primary Inventory Data Matrix */}
-      <main className="inventory-section">
-        {errorMessage && <div className="error-alert-banner">{errorMessage}</div>}
-
+      {/* Main Grid Deck / Table View */}
+      <main className="content-deck">
         {loading ? (
-          <div className="loading-spinner">Querying backend relational memory loops...</div>
+          <div className="loader-overlay">
+            <div className="spinner"></div>
+            <p>Querying local transactional tracking state logs...</p>
+          </div>
         ) : (
-          <div className="table-wrapper">
-            <table className="inventory-table">
+          <div className="table-viewport">
+            <table className="modern-table">
               <thead>
                 <tr>
-                  <th>Asset ID</th>
-                  <th>Hardware Item Description</th>
-                  <th>Category</th>
-                  <th>Cost Basis</th>
-                  <th>Room Location</th>
-                  <th>Lifecycle Status</th>
+                  <th><Hash size={14} /> ID</th>
+                  <th>Hardware Descriptor</th>
+                  <th><Layers size={14} /> Classification</th>
+                  <th>Value Basis</th>
+                  <th><MapPin size={14} /> Deployment Hub</th>
+                  <th>Status Rule Matrix</th>
                 </tr>
               </thead>
               <tbody>
                 {assets.length > 0 ? (
                   assets.map((asset) => (
-                    <tr key={asset.id} className={asset.isMaintenanceFlagged ? 'row-alert-flagged' : ''}>
-                      <td>#{asset.id}</td>
+                    <tr key={asset.id} className={asset.isMaintenanceFlagged ? "flagged-row" : ""}>
+                      <td className="mono-id">#{asset.id}</td>
                       <td>
-                        <span className="asset-name-text">{asset.name}</span>
-                        {asset.isMaintenanceFlagged && <span className="warning-pill">Daemon Maintenance Alert</span>}
+                        <div className="asset-meta-cell">
+                          <span className="asset-primary-name">{asset.name}</span>
+                          <span className="asset-secondary-tag">S/N: {asset.serialNumber} • Custodian: {asset.custodianName}</span>
+                        </div>
                       </td>
-                      <td><span className="tag">{asset.categoryTag}</span></td>
-                      <td>₱{asset.procurementCost.toLocaleString()}</td>
-                      <td>Room {asset.roomId}</td>
-                      <td>{getLifecycleBadge(asset.lifecycleState)}</td>
+                      <td><span className="category-pill">{asset.categoryTag}</span></td>
+                      <td className="price-text">₱{asset.procurementCost.toLocaleString()}</td>
+                      <td>
+                        <span className="location-text">{asset.roomId}</span>
+                      </td>
+                      <td>{getStatusBadge(asset.lifecycleState, asset.isMaintenanceFlagged)}</td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={6} style={{ textAlign: 'center', padding: '32px' }}>
-                      Zero records found matching query parameters.
+                    <td colSpan={6} className="empty-state-cell">
+                      <Trash2 size={40} className="empty-icon" />
+                      <h3>No Operational Records Found</h3>
+                      <p>Adjust your search criteria or reset filters to query alternate schema partitions.</p>
                     </td>
                   </tr>
                 )}
