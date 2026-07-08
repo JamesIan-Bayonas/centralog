@@ -1,122 +1,187 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useState, useEffect } from 'react';
+import { api } from './services/api';
+import { Search, ShieldAlert, CheckCircle, RotateCw, Server, Package } from 'lucide-react';
+import './App.css';
 
-function App() {
-  const [count, setCount] = useState(0)
-
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+interface DashboardSummary {
+  totalAssetCount: number;
+  totalSystemValue: number;
+  activeCount: number;
+  inMaintenanceCount: number;
+  disposedCount: number;
 }
 
-export default App
+interface Asset {
+  id: number;
+  name: string;
+  categoryTag: string;
+  procurementCost: number;
+  roomId: number;
+  custodianId: number;
+  lifecycleState: number;
+  isMaintenanceFlagged: boolean;
+}
+
+function App() {
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  // Fetch dashboard summary metrics
+  const fetchDashboardData = async () => {
+    try {
+      const summaryRes = await api.get('/assets/dashboard/summary');
+      setSummary(summaryRes.data);
+    } catch (err: any) {
+      console.error('Failed to pull dashboard metrics:', err);
+    }
+  };
+
+  // Query assets based on active filter text parameters
+  const fetchAssetsList = async (search = '') => {
+    setLoading(true);
+    setErrorMessage('');
+    try {
+      const endpoint = search ? `/assets/search?SearchTerm=${encodeURIComponent(search)}` : '/assets/search';
+      const res = await api.get(endpoint);
+      // Maps cleanly to PagedResult structural arrays returned by your backend
+      setAssets(res.data.items || []);
+    } catch (err: any) {
+      setErrorMessage(err.response?.data?.error || 'An error occurred fetching inventory records.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
+    fetchAssetsList();
+  }, []);
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    fetchAssetsList(searchTerm);
+  };
+
+  const getLifecycleBadge = (state: number) => {
+    switch (state) {
+      case 2: return <span className="badge badge-active">Active</span>;
+      case 3: return <span className="badge badge-repair">In Maintenance</span>;
+      case 5: return <span className="badge badge-disposed">Disposed</span>;
+      default: return <span className="badge badge-neutral">Procured</span>;
+    }
+  };
+
+  return (
+    <div className="dashboard-container">
+      {/* Header Panel */}
+      <header className="main-header">
+        <div className="branding">
+          <Server className="brand-icon" />
+          <h1>CentraLog System Hub</h1>
+        </div>
+        <button onClick={() => { fetchDashboardData(); fetchAssetsList(searchTerm); }} className="refresh-btn">
+          <RotateCw size={16} /> Refresh Core
+        </button>
+      </header>
+
+      {/* Metrics Cards Strip */}
+      {summary && (
+        <section className="metrics-grid">
+          <div className="metric-card">
+            <div className="metric-header">
+              <Package size={20} />
+              <h3>Total Capital Items</h3>
+            </div>
+            <p className="metric-value">{summary.totalAssetCount}</p>
+          </div>
+          <div className="metric-card">
+            <div className="metric-header">
+              <CheckCircle size={20} color="#10b981" />
+              <h3>Active Fleet</h3>
+            </div>
+            <p className="metric-value">{summary.activeCount}</p>
+          </div>
+          <div className="metric-card">
+            <div className="metric-header">
+              <ShieldAlert size={20} color="#f59e0b" />
+              <h3>In Repair Loops</h3>
+            </div>
+            <p className="metric-value">{summary.inMaintenanceCount}</p>
+          </div>
+          <div className="metric-card">
+            <div className="metric-header">
+              <h3>Total Evaluated Valuation</h3>
+            </div>
+            <p className="metric-value">₱{summary.totalSystemValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+          </div>
+        </section>
+      )}
+
+      {/* Filter and Search Action Box */}
+      <section className="search-section">
+        <form onSubmit={handleSearchSubmit} className="search-bar">
+          <Search className="search-input-icon" size={18} />
+          <input 
+            type="text" 
+            placeholder="Search assets by description or identifier..." 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <button type="submit">Filter Fleet</button>
+        </form>
+      </section>
+
+      {/* Primary Inventory Data Matrix */}
+      <main className="inventory-section">
+        {errorMessage && <div className="error-alert-banner">{errorMessage}</div>}
+
+        {loading ? (
+          <div className="loading-spinner">Querying backend relational memory loops...</div>
+        ) : (
+          <div className="table-wrapper">
+            <table className="inventory-table">
+              <thead>
+                <tr>
+                  <th>Asset ID</th>
+                  <th>Hardware Item Description</th>
+                  <th>Category</th>
+                  <th>Cost Basis</th>
+                  <th>Room Location</th>
+                  <th>Lifecycle Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {assets.length > 0 ? (
+                  assets.map((asset) => (
+                    <tr key={asset.id} className={asset.isMaintenanceFlagged ? 'row-alert-flagged' : ''}>
+                      <td>#{asset.id}</td>
+                      <td>
+                        <span className="asset-name-text">{asset.name}</span>
+                        {asset.isMaintenanceFlagged && <span className="warning-pill">Daemon Maintenance Alert</span>}
+                      </td>
+                      <td><span className="tag">{asset.categoryTag}</span></td>
+                      <td>₱{asset.procurementCost.toLocaleString()}</td>
+                      <td>Room {asset.roomId}</td>
+                      <td>{getLifecycleBadge(asset.lifecycleState)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: '32px' }}>
+                      Zero records found matching query parameters.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+export default App;
