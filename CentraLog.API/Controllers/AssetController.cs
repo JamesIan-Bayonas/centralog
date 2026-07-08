@@ -1,192 +1,209 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using CentraLog.Core.DTOs;
 using CentraLog.Core.Interfaces;
 using CentraLog.Core.Domain.Entities;
 
-namespace CentraLog.API.Controllers;
-
-[ApiController]
-[Route("api/v1/assets")]
-// Note: In production development, authorization policies [Authorize(Roles = "System Admin")] would sit here.
-public class AssetController : ControllerBase
+namespace CentraLog.API.Controllers
 {
-    private readonly IAssetService _assetService;
-
-    public AssetController(IAssetService assetService)
+    [ApiController]
+    [Route("api/v1/[controller]s")]
+    public class AssetController : ControllerBase
     {
-        _assetService = assetService;
-    }
+        private readonly IAssetService _assetService;
 
-    [HttpPost("bulk-transfer")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> BulkTransfer([FromBody] BulkTransferRequestDto request, CancellationToken cancellationToken)
-    {
-        // Mocking an authenticated Admin/Manager Operator User ID (e.g., ID 101) for this session context
-        int activeAdminId = 101;
-
-        // Our global middleware automatically handles sorting and intercepting any thrown errors
-        await _assetService.ExecuteBulkTransferAsync(request, activeAdminId, cancellationToken);
-
-        return Ok(new { message = "Bulk asset tracking relocation initialized successfully." });
-    }
-
-    [HttpGet("search")]
-    [ProducesResponseType(typeof(PagedResult<Asset>), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> GetFilteredAssets([FromQuery] GetAssetsQueryFilterDto filter, CancellationToken cancellationToken)
-    {
-        // The [FromQuery] attribute binds parameters from the URL directly into our DTO
-        var result = await _assetService.GetFilteredAssetsAsync(filter, cancellationToken);
-
-        return Ok(result);
-    }
-
-    [HttpGet("{id:int}/history")]
-    [ProducesResponseType(typeof(AssetHistoryDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetAssetHistory([FromRoute] int id, CancellationToken cancellationToken)
-    {
-        try
+        public AssetController(IAssetService assetService)
         {
-            // The [FromRoute] attribute binds the {id} directly from the URL path variable
+            _assetService = assetService;
+        }
+
+        [HttpGet("search")]
+        [ProducesResponseType(typeof(PagedResult<Asset>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> Search([FromQuery] GetAssetsQueryFilterDto filter, CancellationToken cancellationToken)
+        {
+            var result = await _assetService.GetFilteredAssetsAsync(filter, cancellationToken);
+            return Ok(result);
+        }
+
+        [HttpGet("{id:int}")]
+        [ProducesResponseType(typeof(Asset), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetById([FromRoute] int id, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var asset = await _assetService.GetAssetByIdAsync(id, cancellationToken);
+                return Ok(asset);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("{id:int}/history")]
+        [ProducesResponseType(typeof(AssetHistoryDto), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetHistory([FromRoute] int id, CancellationToken cancellationToken)
+        {
             var history = await _assetService.GetAssetHistoryAsync(id, cancellationToken);
             return Ok(history);
         }
-        catch (KeyNotFoundException ex)
+
+        [HttpGet("dashboard/summary")]
+        [ProducesResponseType(typeof(DashboardSummaryDto), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetDashboardSummary(CancellationToken cancellationToken)
         {
-            // Safely catch missing database records and return a standard 404 response wrapper
-            return NotFound(new { message = ex.Message });
+            var summary = await _assetService.GetDashboardSummaryAsync(cancellationToken);
+            return Ok(summary);
         }
-    }
 
-    [HttpPost("{id:int}/dispose")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> DisposeAsset([FromRoute] int id, [FromBody] DisposeAssetCommandDto dto, CancellationToken cancellationToken)
-    {
-        try
+        [HttpPost("import")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> BulkImport([FromBody] IEnumerable<ImportAssetRowDto> items, CancellationToken cancellationToken)
         {
-            // Hardcoding an authenticated User ID context (e.g., 101) for auditing purposes until Auth is added
-            int mockAdminUserId = 101;
-
-            var success = await _assetService.DisposeAssetAsync(id, dto, mockAdminUserId, cancellationToken);
-
-            return Ok(new { message = $"Asset with ID {id} has been successfully decommissioned and written off." });
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-    }
-
-    [HttpPost("import")]
-    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> ImportAssets([FromBody] IEnumerable<ImportAssetRowDto> items, CancellationToken cancellationToken)
-    {
-        try
-        {
-            var totalImported = await _assetService.ImportAssetBatchAsync(items, cancellationToken);
-
-            return Ok(new
+            try
             {
-                message = "Bulk intake operation completed successfully.",
-                recordsImported = totalImported
-            });
+                var count = await _assetService.ImportAssetBatchAsync(items, cancellationToken);
+                return Ok(new { recordsImported = count, message = "Procurement data matrix ingested successfully." });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
-        catch (ArgumentException ex)
+
+        // =========================================================================
+        // UC-05: EXECUTE BULK LOGISTICS RELOCATION (RBAC PROTECTED)
+        // =========================================================================
+        [HttpPost("bulk-transfer")]
+        [Authorize(Roles = "Manager,SystemAdmin")] // Enforces Manager or Admin permission criteria
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+        public async Task<IActionResult> ExecuteBulkTransfer([FromBody] BulkTransferRequestDto dto, CancellationToken cancellationToken)
         {
-            // Intercept validation or data health rule violations
-            return BadRequest(new { error = ex.Message });
+            try
+            {
+                int adminUserId = GetCurrentUserId();
+                await _assetService.ExecuteBulkTransferAsync(dto, adminUserId, cancellationToken);
+                return Ok(new { message = "Grouped inventory assets successfully relocated across geographic bounds." }); // Success payload
+            }
+            catch (InvalidOperationException ex)
+            {
+                return UnprocessableEntity(new { message = ex.Message }); // Triggers alternative flow 6a
+            }
+            catch (Exception)
+            {
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "Database transaction timeout. Relocation cancelled." }); // Alternative flow 7a
+            }
         }
-    }
 
-    [HttpPost("{id:int}/maintenance/resolve")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> ResolveMaintenance([FromRoute] int id, [FromBody] MaintenanceActionRequestDto dto, CancellationToken cancellationToken)
-    {
-        try
+        // =========================================================================
+        // UC-06: INITIATE PREVENTATIVE MAINTENANCE WORKFLOW (RBAC PROTECTED)
+        // =========================================================================
+        [HttpPatch("{id:int}/maintenance/initiate")]
+        [Authorize(Roles = "InventoryStaff,SystemAdmin")] // Blocks unauthorized accounts with 403 Forbidden
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> InitiateMaintenance([FromRoute] int id, [FromBody] InitiateMaintenanceCommandDto dto, CancellationToken cancellationToken)
         {
-            // Mocking user context ID 101 for operational session audit logs until auth is attached
-            int mockAdminUserId = 101;
-
-            var success = await _assetService.ResolveMaintenanceActionAsync(id, dto, mockAdminUserId, cancellationToken);
-
-            return Ok(new { message = $"Asset with ID {id} has been successfully extracted from repair loops and returned to inventory tracking status." });
+            try
+            {
+                int adminUserId = GetCurrentUserId();
+                await _assetService.InitiateMaintenanceAsync(id, dto, adminUserId, cancellationToken);
+                return Ok(new { message = $"Asset with ID {id} has been successfully locked down and routed to active maintenance workflows." });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-    }
 
-    [HttpGet("dashboard/summary")]
-    [ProducesResponseType(typeof(DashboardSummaryDto), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetDashboardSummary(CancellationToken cancellationToken)
-    {
-        // Fetches native MySQL calculated metrics instantly
-        var summary = await _assetService.GetDashboardSummaryAsync(cancellationToken);
-
-        return Ok(summary);
-    }
-
-    [HttpPost("{id:int}/maintenance/initiate")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> InitiateMaintenance([FromRoute] int id, [FromBody] InitiateMaintenanceCommandDto dto, CancellationToken cancellationToken)
-    {
-        try
+        // =========================================================================
+        // UC-06: RESOLVE ACTIVE MAINTENANCE CALIBRATION WORKFLOW (RBAC PROTECTED)
+        // =========================================================================
+        [HttpPost("{id:int}/maintenance/resolve")]
+        [Authorize(Roles = "InventoryStaff,SystemAdmin")] // Blocks unauthorized accounts with 403 Forbidden
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> ResolveMaintenance([FromRoute] int id, [FromBody] MaintenanceActionRequestDto dto, CancellationToken cancellationToken)
         {
-            // Mock user contextual ID 101 for database auditing purposes
-            int mockAdminUserId = 101;
-
-            var success = await _assetService.InitiateMaintenanceAsync(id, dto, mockAdminUserId, cancellationToken);
-
-            return Ok(new { message = $"Asset with ID {id} has been successfully locked down and routed to active maintenance workflows." });
+            try
+            {
+                int adminUserId = GetCurrentUserId();
+                await _assetService.ResolveMaintenanceActionAsync(id, dto, adminUserId, cancellationToken);
+                return Ok(new { message = $"Asset with ID {id} has been successfully extracted from repair loops." });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { message = ex.Message });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-    }
 
-    [HttpGet("{id:int}")]
-    [ProducesResponseType(typeof(Asset), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetAssetById([FromRoute] int id, CancellationToken cancellationToken)
-    {
-        try
+        private int GetCurrentUserId()
         {
-            var asset = await _assetService.GetAssetByIdAsync(id, cancellationToken);
-            return Ok(asset);
+            // Extracts the NameIdentifier claim written by TokenService
+            var nameIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(nameIdClaim))
+            {
+                throw new UnauthorizedAccessException("Identity Verification Failed: Missing valid contextual authentication claims.");
+            }
+            return int.Parse(nameIdClaim);
         }
-        catch (KeyNotFoundException ex)
+
+        // =========================================================================
+        // FEATURE 6: PERMANENT ASSET DECOMMISSION & DISPOSAL
+        // =========================================================================
+        [HttpPost("{id:int}/dispose")]
+        [Authorize(Roles = "Manager,SystemAdmin")] // Enforces System Admin / Manager disposal authority
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> DisposeAsset([FromRoute] int id, [FromBody] DisposeAssetCommandDto dto, CancellationToken cancellationToken)
         {
-            // Intercept missing records and drop a clean 404 block wrapper
-            return NotFound(new { message = ex.Message });
+            try
+            {
+                // Extract the verified System Admin / Manager ID from the JWT token claims passport
+                var nameIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(nameIdClaim))
+                {
+                    return Unauthorized(new { message = "Identity Verification Failed: Missing valid contextual claims." });
+                }
+                int adminUserId = int.Parse(nameIdClaim);
+
+                await _assetService.DisposeAssetAsync(id, dto, adminUserId, cancellationToken);
+                return Ok(new { message = $"Asset with ID {id} has been permanently decommissioned and removed from active corporate capitalization registers." });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
     }
 }

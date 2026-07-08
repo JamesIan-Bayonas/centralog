@@ -1,6 +1,164 @@
-@CentraLog.API_HostAddress = http://localhost:5162
+# =========================================================================
+# CENTRALOG SYSTEM BACKEND INTEGRATION PLAYBOOK
+# TARGET ENVIRONMENT: VISUAL STUDIO LOCALHOST DEVELOPMENT KERNEL
+# =========================================================================
 
-GET {{CentraLog.API_HostAddress}}/weatherforecast/
+@hostname = localhost
+@port = 7196
+@baseUrl = https://{{hostname}}:{{port}}/api/v1
+
+### -------------------------------------------------------------------------
+### SECTION 1: IDENTITY GATEWAY LOGINS (TOKEN GENERATION)
+### -------------------------------------------------------------------------
+
+# @name loginStaff
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "usernameOrEmail": "staff_cl",
+  "password": "StaffPass123!"
+}
+
+###
+
+# @name loginManager
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "usernameOrEmail": "manager_cl",
+  "password": "ManagerPass123!"
+}
+
+### -------------------------------------------------------------------------
+### SECTION 2: UC-06 PREVENTATIVE MAINTENANCE WORKFLOW CHECKS
+### -------------------------------------------------------------------------
+
+# 1. Fetch all assets to observe the background daemon's tracking flags
+GET {{baseUrl}}/assets/search
 Accept: application/json
 
 ###
+
+# 2. UC-06 Step 7: Staff member initiates a maintenance workflow via PATCH
+# Uses the token captured from the staff login request
+@staffToken = {{loginStaff.response.body.token}}
+
+PATCH {{baseUrl}}/assets/3/maintenance/initiate
+Authorization: Bearer {{staffToken}}
+Content-Type: application/json
+
+{
+  "issueDescription": "Core Edge Router overheating; clearing preventative warnings for calibration loop setup.",
+  "isUrgent": true
+}
+
+###
+
+# 3. UC-06 Step 8a: Security Breach Attempt
+# A Manager tries to resolve a maintenance workflow, which should return a 403 Forbidden status
+@managerToken = {{loginManager.response.body.token}}
+
+POST {{baseUrl}}/assets/3/maintenance/resolve
+Authorization: Bearer {{managerToken}}
+Content-Type: application/json
+
+{
+  "resolutionNotes": "Unauthorized attempt to close workflow.",
+  "repairCost": 1500.00,
+  "targetState": 2
+}
+
+###
+
+# 4. Staff member successfully resolves the maintenance workflow
+POST {{baseUrl}}/assets/3/maintenance/resolve
+Authorization: Bearer {{staffToken}}
+Content-Type: application/json
+
+{
+  "resolutionNotes": "Re-applied Honeywell PTM7950 thermal material and updated configurations.",
+  "repairCost": 1250.00,
+  "targetState": 2
+}
+
+
+### -------------------------------------------------------------------------
+### SECTION 3: UC-05 BULK TRANSFER SECURITY CHECKS
+### -------------------------------------------------------------------------
+
+# 1. UC-05 Step 4: Manager executes a bulk relocation transfer
+POST {{baseUrl}}/assets/bulk-transfer
+Authorization: Bearer {{managerToken}}
+Content-Type: application/json
+
+{
+  "assetIds": [1, 2],
+  "destinationRoomId": 404,
+  "newCustodianId": 8
+}
+
+###
+
+# 2. UC-05 Step 6a: Defensive validation failure
+# Attempting to move Asset 3 while it's in maintenance should return a 422 Unprocessable Entity status
+POST {{baseUrl}}/assets/bulk-transfer
+Authorization: Bearer {{managerToken}}
+Content-Type: application/json
+
+{
+  "assetIds": [3],
+  "destinationRoomId": 505,
+  "newCustodianId": 12
+}
+
+### -------------------------------------------------------------------------
+### SECTION 4: FINANCIAL COMPLIANCE AND DAEMON FREEZE CHECKS
+### -------------------------------------------------------------------------
+
+# Query dashboard metrics to verify that Total Capital Value matches real-time depreciated values
+GET {{baseUrl}}/assets/dashboard/summary
+Accept: application/json
+
+### -------------------------------------------------------------------------
+### SECTION 5: ACCOUNTANT IDENTITY LOGIN & ASSET DISPOSAL ROLES
+### -------------------------------------------------------------------------
+
+# @name loginAccountant
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "usernameOrEmail": "accountant_cl",
+  "password": "AccountantPass123!"
+}
+
+###
+
+# Attempt to authorize an asset disposal using an Accountant session token
+# This check must fail with an HTTP 403 Forbidden status because only managers can retire assets.
+@accountantToken = {{loginAccountant.response.body.token}}
+
+POST {{baseUrl}}/assets/1/dispose
+Authorization: Bearer {{accountantToken}}
+Content-Type: application/json
+
+{
+  "disposalReason": "Obsolescence following server room infrastructure modernization cycle.",
+  "scrapRecoveryValue": 5000.00
+}
+
+###
+
+# Execute a successful asset disposal using the verified Manager session token
+@managerTokenFromPlaybook = {{loginManager.response.body.token}}
+
+POST {{baseUrl}}/assets/1/dispose
+Authorization: Bearer {{managerTokenFromPlaybook}}
+Content-Type: application/json
+
+{
+  "disposalReason": "Obsolescence following server room infrastructure modernization cycle.",
+  "scrapRecoveryValue": 5000.00
+}
