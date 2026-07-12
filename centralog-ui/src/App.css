@@ -287,3 +287,65 @@
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+/* =========================================================================
+   FEATURE 7 & 8: INSTITUTIONAL PRINT SHEET ENGINE
+   ========================================================================= */
+
+.report-controls-deck {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 4px;
+}
+
+/* Print Overrides: Intercepts the screen buffer rendering engine */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  
+  /* Suppress UI elements that don't belong on a physical auditor sheet */
+  .workspace-header,
+  .theme-trigger-deck,
+  .filter-panel,
+  .report-controls-deck,
+  .action-button,
+  th:nth-child(1), 
+  td:nth-child(1) { /* Hides action selection checkboxes */
+    display: none !important;
+  }
+  
+  .app-workspace,
+  .table-viewport,
+  .modern-table {
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    width: 100% !important;
+  }
+  
+  .modern-table th {
+    background-color: #f1f5f9 !important;
+    color: #0f172a !important;
+    border-bottom: 2px solid #cbd5e1 !important;
+    font-size: 11px !important;
+  }
+  
+  .modern-table td {
+    border-bottom: 1px solid #e2e8f0 !important;
+    padding: 10px 8px !important;
+    font-size: 11px !important;
+  }
+
+  .row-maintenance {
+    animation: none !important;
+    background-color: #fffbeb !important;
+  }
+}

@@ -4,6 +4,7 @@ import { useAuth } from './context/AuthContext';
 import { LoginModal } from './components/LoginModal'; // Injected gateway layout link
 import { Search, ShieldAlert, CheckCircle, RotateCw, Server, Package, Trash2, Layers, MapPin, Hash, DollarSign, ArrowLeftRight, Wrench, LogOut, UserCheck } from 'lucide-react';
 import './App.css';
+import { AssetDetailSidebar } from './components/AssetDetailSidebar';
 
 type LEDGER_THEMES = 'theme-obsidian' | 'theme-light' | 'theme-dmc';
 
@@ -21,6 +22,7 @@ function App() {
   const [destinationRoom, setDestinationRoom] = useState<number>(101);
   const [newCustodian, setNewCustodian] = useState<number>(1);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
+  const [activeInspectedAsset, setActiveInspectedAsset] = useState<Asset | null>(null);
 
   const loadDashboardMetrics = async () => {
     if (!isAuthenticated) return;
@@ -115,6 +117,10 @@ function App() {
     } catch (error: any) {
       setActionFeedback(`Error: ${error.response?.data?.message || 'Resolution failed.'}`);
     }
+  };
+
+  const triggerCompliancePrint = () => {
+    window.print();
   };
 
   const getStatusBadge = (state: number, flagged: boolean) => {
@@ -238,6 +244,25 @@ function App() {
         </div>
       )}
 
+      {/* --- INSERTED COMPLIANCE EXPORTER TOOLBAR --- */}
+      {hasClearance(['Manager', 'SystemAdmin', 'Accountant']) && (
+        <section className="report-controls-deck">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600 }}>Compliance Export Controls</h3>
+            <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>
+              Generate legally binding balance sheets and unmodifiable asset tracking summaries[cite: 18, 39, 40].
+            </p>
+          </div>
+          <button 
+            onClick={triggerCompliancePrint} 
+            className="action-button primary" 
+            style={{ marginLeft: 'auto', backgroundColor: 'var(--clr-success)' }}
+          >
+            Export Tabular Report Ledger [cite: 39, 40]
+          </button>
+        </section>
+      )}
+
       <section className="filter-panel">
         <form onSubmit={handleSearch} className="search-form">
           <div className="input-group">
@@ -268,8 +293,13 @@ function App() {
               <tbody>
                 {assets.length > 0 ? (
                   assets.map((asset) => (
-                    <tr key={asset.id} className={asset.isMaintenanceFlagged ? "row-maintenance flagged-row" : ""}>
-                      <td>
+                    <tr 
+                      key={asset.id} 
+                      className={asset.isMaintenanceFlagged ? "row-maintenance flagged-row" : ""}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => setActiveInspectedAsset(asset)} // Opens sidebar on row context tap
+                    >
+                      <td onClick={(e) => e.stopPropagation()}> {/* Stop check click from snapping panel open */}
                         <input 
                           type="checkbox" 
                           checked={selectedAssetIds.includes(asset.id)}
@@ -287,11 +317,10 @@ function App() {
                       <td><span className="category-pill">{asset.categoryTag}</span></td>
                       <td className="price-text mono">₱{asset.procurementCost.toLocaleString()}</td>
                       <td><span className="location-text mono">Room Reference: #{asset.roomId}</span></td>
-                      <td>
+                      <td onClick={(e) => e.stopPropagation()}> {/* Stop action button click from snapping panel open */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           {getStatusBadge(asset.lifecycleState, asset.isMaintenanceFlagged)}
                           
-                          {/* RBAC Evaluation: Lock actions unless the matching identity scope criteria is met */}
                           {asset.lifecycleState === 2 && hasClearance(['Inventory Staff', 'Manager']) && (
                             <button onClick={() => handleInitiateMaintenance(asset.id)} className="action-button secondary" style={{ padding: '4px 8px', fontSize: '11px' }}>
                               <Wrench size={10} /> Lock for Repair
@@ -320,6 +349,19 @@ function App() {
           </div>
         )}
       </main>
+      {/* --- SIDEBAR PANEL INFRASTRUCTURE MOUNT --- */}
+      <AssetDetailSidebar 
+        asset={activeInspectedAsset}
+        onClose={() => setActiveInspectedAsset(null)}
+        onInitiateMaintenance={async (id) => {
+          await handleInitiateMaintenance(id);
+          setActiveInspectedAsset(prev => prev ? { ...prev, lifecycleState: 3 } : null);
+        }}
+        onResolveMaintenance={async (id) => {
+          await handleResolveMaintenance(id);
+          setActiveInspectedAsset(prev => prev ? { ...prev, lifecycleState: 2, isMaintenanceFlagged: false } : null);
+        }}
+      />
     </div>
   );
 }
