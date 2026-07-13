@@ -1,4 +1,5 @@
-﻿using System;
+﻿// File path: CentraLog.API/Controllers/AssetController.cs
+using System;
 using System.Collections.Generic;
 using System.Security.Claims;
 using System.Threading;
@@ -47,12 +48,25 @@ namespace CentraLog.API.Controllers
             }
         }
 
+        // =========================================================================
+        // FEATURE 9: REAL-TIME AUDIT TRAIL TIMELINE ROUTE (CONSOLIDATED ENGINES)
+        // =========================================================================
         [HttpGet("{id:int}/history")]
+        [Authorize] 
         [ProducesResponseType(typeof(AssetHistoryDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetHistory([FromRoute] int id, CancellationToken cancellationToken)
         {
-            var history = await _assetService.GetAssetHistoryAsync(id, cancellationToken);
-            return Ok(history);
+            try
+            {
+                var history = await _assetService.GetAssetHistoryAsync(id, cancellationToken);
+                return Ok(history);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
         }
 
         [HttpGet("dashboard/summary")]
@@ -79,11 +93,8 @@ namespace CentraLog.API.Controllers
             }
         }
 
-        // =========================================================================
-        // UC-05: EXECUTE BULK LOGISTICS RELOCATION (RBAC PROTECTED)
-        // =========================================================================
         [HttpPost("bulk-transfer")]
-        [Authorize(Roles = "Manager,SystemAdmin")] // Enforces Manager or Admin permission criteria
+        [Authorize(Roles = "Manager,SystemAdmin")] 
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -94,23 +105,20 @@ namespace CentraLog.API.Controllers
             {
                 int adminUserId = GetCurrentUserId();
                 await _assetService.ExecuteBulkTransferAsync(dto, adminUserId, cancellationToken);
-                return Ok(new { message = "Grouped inventory assets successfully relocated across geographic bounds." }); // Success payload
+                return Ok(new { message = "Grouped inventory assets successfully relocated across geographic bounds." });
             }
             catch (InvalidOperationException ex)
             {
-                return UnprocessableEntity(new { message = ex.Message }); // Triggers alternative flow 6a
+                return UnprocessableEntity(new { message = ex.Message });
             }
             catch (Exception)
             {
-                return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "Database transaction timeout. Relocation cancelled." }); // Alternative flow 7a
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "Database transaction timeout. Relocation cancelled." });
             }
         }
 
-        // =========================================================================
-        // UC-06: INITIATE PREVENTATIVE MAINTENANCE WORKFLOW (RBAC PROTECTED)
-        // =========================================================================
         [HttpPatch("{id:int}/maintenance/initiate")]
-        [Authorize(Roles = "InventoryStaff,SystemAdmin")] // Blocks unauthorized accounts with 403 Forbidden
+        [Authorize(Roles = "InventoryStaff,SystemAdmin")] 
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -133,11 +141,8 @@ namespace CentraLog.API.Controllers
             }
         }
 
-        // =========================================================================
-        // UC-06: RESOLVE ACTIVE MAINTENANCE CALIBRATION WORKFLOW (RBAC PROTECTED)
-        // =========================================================================
         [HttpPost("{id:int}/maintenance/resolve")]
-        [Authorize(Roles = "InventoryStaff,SystemAdmin")] // Blocks unauthorized accounts with 403 Forbidden
+        [Authorize(Roles = "InventoryStaff,SystemAdmin")] 
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -160,22 +165,8 @@ namespace CentraLog.API.Controllers
             }
         }
 
-        private int GetCurrentUserId()
-        {
-            // Extracts the NameIdentifier claim written by TokenService
-            var nameIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(nameIdClaim))
-            {
-                throw new UnauthorizedAccessException("Identity Verification Failed: Missing valid contextual authentication claims.");
-            }
-            return int.Parse(nameIdClaim);
-        }
-
-        // =========================================================================
-        // FEATURE 6: PERMANENT ASSET DECOMMISSION & DISPOSAL
-        // =========================================================================
         [HttpPost("{id:int}/dispose")]
-        [Authorize(Roles = "Manager,SystemAdmin")] // Enforces System Admin / Manager disposal authority
+        [Authorize(Roles = "Manager,SystemAdmin")] 
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -185,14 +176,7 @@ namespace CentraLog.API.Controllers
         {
             try
             {
-                // Extract the verified System Admin / Manager ID from the JWT token claims passport
-                var nameIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(nameIdClaim))
-                {
-                    return Unauthorized(new { message = "Identity Verification Failed: Missing valid contextual claims." });
-                }
-                int adminUserId = int.Parse(nameIdClaim);
-
+                int adminUserId = GetCurrentUserId();
                 await _assetService.DisposeAssetAsync(id, dto, adminUserId, cancellationToken);
                 return Ok(new { message = $"Asset with ID {id} has been permanently decommissioned and removed from active corporate capitalization registers." });
             }
@@ -204,6 +188,16 @@ namespace CentraLog.API.Controllers
             {
                 return BadRequest(new { message = ex.Message });
             }
+        }
+
+        private int GetCurrentUserId()
+        {
+            var nameIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(nameIdClaim))
+            {
+                throw new UnauthorizedAccessException("Identity Verification Failed: Missing valid contextual authentication claims.");
+            }
+            return int.Parse(nameIdClaim);
         }
     }
 }

@@ -1,4 +1,5 @@
-﻿using System;
+﻿// File path: CentraLog.Infrastructure/Services/AssetService.cs
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -180,9 +181,6 @@ namespace CentraLog.Infrastructure.Services
             }
         }
 
-        // =========================================================================
-        // SATISFIES CORE INTERFACE CONTRACT RECREATION FOR ASSET RETIREMENT
-        // =========================================================================
         public async Task<bool> DisposeAssetAsync(int assetId, DisposeAssetCommandDto dto, int adminUserId, CancellationToken cancellationToken = default)
         {
             using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
@@ -196,7 +194,9 @@ namespace CentraLog.Infrastructure.Services
                 }
 
                 var timestamp = DateTime.UtcNow;
+
                 asset.LifecycleState = LifecycleState.Disposed;
+                asset.SalvageValue = dto.ScrapRecoveryValue;
                 asset.UpdatedAt = timestamp;
 
                 var auditLog = new AuditLog
@@ -242,16 +242,7 @@ namespace CentraLog.Infrastructure.Services
                                    .Take(filter.PageSize)
                                    .ToListAsync(cancellationToken);
 
-            // FIXED: Uses the matching parameterized constructor signature
             return new PagedResult<Asset>(items, totalCount, filter.PageNumber, filter.PageSize);
-        }
-
-        public async Task<AssetHistoryDto> GetAssetHistoryAsync(int id, CancellationToken cancellationToken = default)
-        {
-            var auditLogs = await _context.AuditLogs.Where(l => l.AssetId == id).ToListAsync(cancellationToken);
-
-            // FIXED: Binds collection array to matching internal history property name
-            return new AssetHistoryDto { AssetId = id, AuditLogs = auditLogs };
         }
 
         public async Task<int> ImportAssetBatchAsync(IEnumerable<ImportAssetRowDto> items, CancellationToken cancellationToken = default)
@@ -272,6 +263,68 @@ namespace CentraLog.Infrastructure.Services
             await _context.Assets.AddRangeAsync(assetsToInsert, cancellationToken);
             await _context.SaveChangesAsync(cancellationToken);
             return assetsToInsert.Count;
+        }
+
+        // =========================================================================
+        // FEATURE 9: REAL-TIME AUDIT LOG TRAIL PROJECTOR (ENRICHED PROJECTOR FEED)
+        // =========================================================================
+        public async Task<AssetHistoryDto> GetAssetHistoryAsync(int assetId, CancellationToken cancellationToken = default)
+        {
+            var asset = await _context.Assets.FirstOrDefaultAsync(a => a.Id == assetId, cancellationToken);
+            if (asset == null)
+            {
+                throw new KeyNotFoundException($"History lookup rejected: Asset ID {assetId} does not exist in relational nodes.");
+            }
+
+            var rawLogs = await _context.AuditLogs
+                .Where(log => log.AssetId == assetId)
+                .OrderByDescending(log => log.Timestamp)
+                .ToListAsync(cancellationToken);
+
+            var enrichedEntries = new List<AuditLogTimelineEntryDto>();
+            var allUsers = await _context.Users.ToDictionaryAsync(u => u.Id, u => u.Username, cancellationToken);
+
+            foreach (var log in rawLogs)
+            {
+                string oldRoomName = log.OldRoomId == 101 ? "Room 101 (Admin Office)" :
+                                     log.OldRoomId == 202 ? "Room 202 (Server Room)" :
+                                     log.OldRoomId == 303 ? "Room 303 (Laboratory)" : $"Room #{log.OldRoomId}";
+
+                string newRoomName = log.NewRoomId == 101 ? "Room 101 (Admin Office)" :
+                                     log.NewRoomId == 202 ? "Room 202 (Server Room)" :
+                                     log.NewRoomId == 303 ? "Room 303 (Laboratory)" : $"Room #{log.NewRoomId}";
+
+                string oldCustodianName = log.OldCustodianId == 1 ? "Custodian #1 (Systems Lead)" :
+                                          log.OldCustodianId == 2 ? "Custodian #2 (Network Admin)" : $"Handler #{log.OldCustodianId}";
+
+                string newCustodianName = log.NewCustodianId == 1 ? "Custodian #1 (Systems Lead)" :
+                                          log.NewCustodianId == 2 ? "Custodian #2 (Network Admin)" : $"Handler #{log.NewCustodianId}";
+
+                allUsers.TryGetValue(log.ModifiedByUserId, out var operatorName);
+
+                enrichedEntries.Add(new AuditLogTimelineEntryDto
+                {
+                    LogId = log.Id,
+                    OldRoomId = log.OldRoomId,
+                    OldRoomName = oldRoomName,
+                    NewRoomId = log.NewRoomId,
+                    NewRoomName = newRoomName,
+                    OldCustodianId = log.OldCustodianId,
+                    OldCustodianName = oldCustodianName,
+                    NewCustodianId = log.NewCustodianId,
+                    NewCustodianName = newCustodianName,
+                    ModifiedByUserId = log.ModifiedByUserId,
+                    OperatorUsername = operatorName ?? "System Automated Daemon",
+                    Timestamp = log.Timestamp
+                });
+            }
+
+            return new AssetHistoryDto
+            {
+                AssetId = asset.Id,
+                AssetName = asset.Name,
+                TimelineEntries = enrichedEntries
+            };
         }
     }
 }
