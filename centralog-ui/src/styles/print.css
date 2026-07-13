@@ -1,0 +1,49 @@
+/* File path: centralog-ui/src/styles/print.css */
+
+@media print {
+  /* Hide dashboard navigation bars and action drawers entirely */
+  .no-print,
+  .centralog-sidebar-container,
+  nav,
+  header,
+  button {
+    display: none !important;
+  }
+
+  body, 
+  .centralog-ledger-wrapper {
+    background: #ffffff !important;
+    color: #000000 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+  }
+
+  /* Force table formatting to use high contrast monochrome lines for corporate auditing */
+  table {
+    border: 1px solid #000000 !important;
+    width: 100% !important;
+    page-break-inside: auto;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  th, td {
+    border-bottom: 1px solid #000000 !important;
+    color: #000000 !important;
+    padding: 8px !important;
+    font-size: 11px !important;
+  }
+
+  th {
+    background: #f3f4f6 !important;
+    font-weight: bold !important;
+  }
+}
