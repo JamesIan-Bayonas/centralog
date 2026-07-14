@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { assetApiEnriched, type DepreciationLedgerReportDto } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Printer, FileSpreadsheet, ShieldAlert, DollarSign } from 'lucide-react';
+import { Printer, ShieldAlert, DollarSign } from 'lucide-react';
 
 export const FinancialLedgerReport: React.FC = () => {
   const { hasClearance } = useAuth();
