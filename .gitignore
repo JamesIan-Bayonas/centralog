@@ -1,3 +1,65 @@
-.vs/
+# File path: .gitignore
+
+# =========================================================================
+# 1. DOTNET & MSBUILD SYSTEM BUILDS
+# =========================================================================
 [Bb]in/
 [Oo]bj/
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.runsettings
+
+# =========================================================================
+# 2. VERCEL & REACT / NODE DEV ENVIRONMENT (centralog-ui)
+# =========================================================================
+node_modules/
+centralog-ui/node_modules/
+centralog-ui/dist/
+centralog-ui/dist-ssr/
+centralog-ui/out/
+centralog-ui/.svelte-kit/
+.npm/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================================================================
+# 3. CRITICAL SECURITY - CREDENTIALS & ENV CONFIGURATIONS
+# =========================================================================
+# Ignore actual local app settings containing active connection strings
+CentraLog.API/appsettings.json
+CentraLog.API/appsettings.Development.json
+
+# Local Environment secrets (Vite and Node)
+.env
+.env.local
+.env.*.local
+centralog-ui/.env
+centralog-ui/.env.local
+centralog-ui/.env.*.local
+
+# =========================================================================
+# 4. COMPILER LINTING & TESTING CACHES
+# =========================================================================
+.eslintcache
+.vitestcache/
+centralog-ui/.eslintcache
+centralog-ui/node_modules/.tmp/
+
+# =========================================================================
+# 5. OS SPECIFIC METADATA
+# =========================================================================
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# =========================================================================
+# 6. TOOL-SPECIFIC PACKING CACHES
+# =========================================================================
+repomix-output*.xml

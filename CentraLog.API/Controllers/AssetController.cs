@@ -141,30 +141,6 @@ namespace CentraLog.API.Controllers
             }
         }
 
-        [HttpPost("{id:int}/maintenance/resolve")]
-        [Authorize(Roles = "InventoryStaff,SystemAdmin")] 
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status403Forbidden)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> ResolveMaintenance([FromRoute] int id, [FromBody] MaintenanceActionRequestDto dto, CancellationToken cancellationToken)
-        {
-            try
-            {
-                int adminUserId = GetCurrentUserId();
-                await _assetService.ResolveMaintenanceActionAsync(id, dto, adminUserId, cancellationToken);
-                return Ok(new { message = $"Asset with ID {id} has been successfully extracted from repair loops." });
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(new { message = ex.Message });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequest(new { message = ex.Message });
-            }
-        }
-
         [HttpPost("{id:int}/dispose")]
         [Authorize(Roles = "Manager,SystemAdmin")] 
         [ProducesResponseType(StatusCodes.Status200OK)]
@@ -198,6 +174,62 @@ namespace CentraLog.API.Controllers
                 throw new UnauthorizedAccessException("Identity Verification Failed: Missing valid contextual authentication claims.");
             }
             return int.Parse(nameIdClaim);
+        }
+
+        // File path: CentraLog.API/Controllers/AssetController.cs
+        // Append this route handler inside your existing AssetController class container:
+
+        // =========================================================================
+        // FEATURE 7: AUTOMATED TABULAR REPORT GENERATION (ACCOUNTANT GATEWAY)
+        // =========================================================================
+        [HttpGet("finance/ledger-report")]
+        [Authorize(Roles = "Accountant,SystemAdmin")]
+        [ProducesResponseType(typeof(DepreciationLedgerReportDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        public async Task<IActionResult> GetDepreciationLedgerReport(CancellationToken cancellationToken)
+        {
+            var report = await _assetService.GetDepreciationLedgerReportAsync(cancellationToken);
+            return Ok(report);
+        }
+
+        [HttpPost("{id:int}/maintenance/resolve")]
+        [Authorize(Roles = "InventoryStaff,SystemAdmin")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+        public async Task<IActionResult> ResolveMaintenance([FromRoute] int id, [FromBody] MaintenanceActionRequestDto dto, CancellationToken cancellationToken)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            try
+            {
+                int adminUserId = GetCurrentUserId();
+                await _assetService.ResolveMaintenanceActionAsync(id, dto, adminUserId, cancellationToken);
+                return Ok(new { message = $"Asset with ID {id} has been successfully extracted from repair loops and restored to active operations." });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+            catch (TimeoutException ex)
+            {
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = $"An unhandled hardware engine fault occurred: {ex.Message}" });
+            }
         }
     }
 }
