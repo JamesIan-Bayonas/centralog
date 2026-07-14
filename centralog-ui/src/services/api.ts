@@ -1,8 +1,13 @@
-// File path: centralog-ui/src/services/api.ts
-
 import axios from 'axios';
 
-const API_BASE_URL = 'https://localhost:7196/api/v1';
+// const API_BASE_URL = 'https://localhost:7196/api/v1'; //<-- this is the link for the local development environment
+
+/**
+ * ARCHITECTURAL NETWORK BRIDGE CONFIGURATION
+ * Vercel builds adaptively select the base production server URL,
+ * while local runtimes fallback gracefully to your active Kestrel HTTP port profile.
+ */
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5162/api/v1';
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -84,7 +89,6 @@ export interface AssetHistoryDto {
 // =========================================================================
 api.interceptors.request.use(
   (config) => {
-    // Aligned to your operational session storage key parameter
     const sessionToken = sessionStorage.getItem('cl_session_token');
     if (sessionToken && config.headers) {
       config.headers.Authorization = `Bearer ${sessionToken}`;
@@ -131,17 +135,11 @@ export const LifecycleStateMap: Record<number, { label: string; color: string }>
 // REST API ROUTER COMPONENT MODULE ACTIONS
 // =========================================================================
 export const assetApi = {
-  /**
-   * Queries the live dashboard telemetry statistics from the C# backend.
-   */
   getDashboardSummary: async (): Promise<DashboardSummary> => {
     const response = await api.get<DashboardSummary>('/assets/dashboard/summary');
     return response.data;
   },
 
-  /**
-   * Executes a paged network search filtering the physical asset registry rows.
-   */
   searchAssets: async (searchTerm: string, page: number, pageSize: number): Promise<PagedResult<Asset>> => {
     const response = await api.get<PagedResult<Asset>>('/assets/search', {
       params: { searchTerm, pageNumber: page, pageSize }
@@ -149,9 +147,6 @@ export const assetApi = {
     return response.data;
   },
 
-  /**
-   * Authorizes and fires a bulk relational migration payload across rooms.
-   */
   executeBulkTransfer: async (assetIds: number[], destinationRoomId: number, newCustodianId: number): Promise<{ message: string }> => {
     const response = await api.post<{ message: string }>('/assets/bulk-transfer', {
       assetIds,
@@ -161,9 +156,6 @@ export const assetApi = {
     return response.data;
   },
 
-  /**
-   * Retires a targeted hardware asset from active capitalization tracking logs.
-   */
   disposeAsset: async (assetId: number, disposalReason: string, scrapRecoveryValue: number): Promise<{ message: string }> => {
     const response = await api.post<{ message: string }>(`/assets/${assetId}/dispose`, {
       disposalReason,
@@ -172,10 +164,6 @@ export const assetApi = {
     return response.data;
   },
 
-  /**
-   * Pulls the complete, enriched chronological audit trail for a targeted asset.
-   * Satisfies Feature 9 UI layout consumption needs completely.
-   */
   getAssetHistory: async (assetId: number): Promise<AssetHistoryDto> => {
     const response = await api.get<AssetHistoryDto>(`/assets/${assetId}/history`);
     return response.data;
@@ -204,16 +192,67 @@ export interface DepreciationLedgerReportDto {
   rows: LedgerAssetRowDto[];
 }
 
-// Extend the existing export const assetApi object container with this trailing handler:
+// 1. ADDED: Payload contract interface matching C# API Controller expectation exactly
+export interface MaintenanceResolutionPayload {
+  resolutionNotes: string;
+  repairCost: number;
+  targetState: number;
+}
+
+export interface InitiateMaintenancePayload {
+  issueDescription: string;
+  isUrgent: boolean;
+}
+
+export interface MaintenanceResolutionPayload {
+  resolutionNotes: string;
+  repairCost: number;
+  targetState: number; // Maps to C# LifecycleState Enum (e.g., 2 = Active)
+}
+
+export interface NewAssetPayloadDto {
+  name: string;
+  categoryTag: string;
+  procurementCost: number;
+  roomId: number;
+  custodianId: number;
+}
+// 2. EXTENDED: Enriched endpoints tracking features natively
 export const assetApiEnriched = {
   ...assetApi,
 
   /**
    * Fetches the complete real-time enterprise depreciation asset ledger report.
-   * Strictly guarded by Accountant role policies client and server side.
+   * Guarded tightly by Accountant/SystemAdmin policies on both client and server layers.
    */
   getDepreciationLedgerReport: async (): Promise<DepreciationLedgerReportDto> => {
     const response = await api.get<DepreciationLedgerReportDto>('/assets/finance/ledger-report');
     return response.data;
-  }
+  },
+
+  /**
+   * Transitions an asset out of active operations into an InMaintenance repair loop.
+   * Automatically halts mathematical depreciation updates in the backend financial layers.
+   */
+  initiateMaintenanceAction: async (assetId: number, payload: InitiateMaintenancePayload): Promise<{ message: string }> => {
+    const response = await api.patch<{ message: string }>(`/assets/${assetId}/maintenance/initiate`, payload);
+    return response.data;
+  },
+
+  /**
+   * Dispatches resolution notes and overhead costs to close out calibration loops.
+   * Restores the asset back to standard active fleet tracking configurations.
+   */
+  resolveMaintenanceAction: async (assetId: number, payload: MaintenanceResolutionPayload): Promise<{ message: string }> => {
+    const response = await api.post<{ message: string }>(`/assets/${assetId}/maintenance/resolve`, payload);
+    return response.data;
+  },
+  /**
+   * Dispatches a fresh procurement batch entry collection to the database context layer.
+   * Cleared for InventoryStaff, Managers, and SystemAdmin profiles.
+   */
+  importAssetRegistryBatch: async (payload: NewAssetPayloadDto[]): Promise<{ recordsImported: number; message: string }> => {
+    const response = await api.post<{ recordsImported: number; message: string }>('/assets/import', payload);
+    return response.data;
+  } 
 };

@@ -2,7 +2,6 @@
    CENTRALOG MAIN MASTER ENGINE LAYOUT & FLEXBOX ARCHITECTURE
    ========================================================================= */
 
-/* Main Container Constraints */
 .app-workspace {
   box-sizing: border-box;
   padding: 24px;
@@ -11,7 +10,6 @@
   gap: 24px;
 }
 
-/* Header Section Alignment */
 .workspace-header {
   display: flex;
   align-items: center;
@@ -52,7 +50,6 @@
   color: var(--text-muted);
 }
 
-/* Operational Metrics Cards Grid Layout */
 .stats-container {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -102,12 +99,10 @@
   background-color: var(--row-hover);
 }
 
-/* Color Status Overrides */
 .text-success { color: var(--clr-success); }
 .text-warning { color: var(--clr-warning); }
 .text-bright { color: var(--accent); }
 
-/* Filter & High-Density Search Input Form Panels */
 .filter-panel {
   background-color: var(--surface);
   border: 1px solid var(--border);
@@ -130,7 +125,7 @@
   position: absolute;
   left: 14px;
   top: 50%;
-  transform: translate1d(0, -50%, 0);
+  transform: translateY(-50%);
   color: var(--text-muted);
   pointer-events: none;
 }
@@ -152,7 +147,6 @@
   border-color: var(--accent);
 }
 
-/* Standard Button Structural Components */
 .action-button {
   display: inline-flex;
   align-items: center;
@@ -193,7 +187,6 @@
   font-weight: 600;
 }
 
-/* Datagrid Layout Viewport Layer */
 .content-deck {
   flex-grow: 1;
   width: 100%;
@@ -239,7 +232,6 @@
   border: 1px solid var(--border);
 }
 
-/* System Status Pill Badge Classes */
 .status-badge {
   display: inline-flex;
   align-items: center;
@@ -251,10 +243,9 @@
 
 .status-success { background-color: rgba(16, 185, 129, 0.1); color: var(--clr-success); }
 .status-warning { background-color: rgba(245, 158, 11, 0.1); color: var(--clr-warning); }
-.status-danger { background-color: rgba(239, 64, 64, 0.1); color: var(--clr-danger); }
+.status-danger { background-color: rgba(239, 68, 68, 0.1); color: var(--clr-danger); }
 .status-neutral { background-color: var(--row-hover); color: var(--text-muted); }
 
-/* Empty States Handling Styles */
 .empty-state-cell {
   padding: 60px 20px;
   text-align: center;
@@ -278,7 +269,6 @@
   font-size: 13px;
 }
 
-/* Animation Keys for Loader & Sync Operations */
 .spin {
   animation: spin-kf 1s linear infinite;
 }
@@ -287,10 +277,6 @@
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
-
-/* =========================================================================
-   FEATURE 7 & 8: INSTITUTIONAL PRINT SHEET ENGINE
-   ========================================================================= */
 
 .report-controls-deck {
   display: flex;
@@ -303,49 +289,95 @@
   margin-bottom: 4px;
 }
 
-/* Print Overrides: Intercepts the screen buffer rendering engine */
+/* =========================================================================
+   COMPLIANCE AUDIT PRINT LAYOUT STYLES SHEET
+   ========================================================================= */
 @media print {
+  @page {
+    size: letter landscape;
+    margin: 12mm 12mm 12mm 12mm;
+  }
+
   body {
     background: #ffffff !important;
     color: #000000 !important;
+    font-size: 10pt !important;
   }
-  
-  /* Suppress UI elements that don't belong on a physical auditor sheet */
+
+  /* Suppress layout wrappers and elements that do not fit a hard ledger page */
   .workspace-header,
   .theme-trigger-deck,
   .filter-panel,
   .report-controls-deck,
+  .stats-container,
   .action-button,
-  th:nth-child(1), 
-  td:nth-child(1) { /* Hides action selection checkboxes */
+  th:nth-child(1),
+  td:nth-child(1) {
     display: none !important;
   }
-  
-  .app-workspace,
-  .table-viewport,
-  .modern-table {
+
+  .app-workspace {
     padding: 0 !important;
     margin: 0 !important;
+    gap: 0 !important;
+  }
+
+  /* Structural Document Header generation exclusively for the printed paper context */
+  .app-workspace::before {
+    content: "CENTRALOG HARDWARE RESOURCE CAPITAL LEDGER\A STATUS VERIFICATION REPORT FOR AUDIT PURPOSES\A GENERATED: SYSTEM AUTOMATION WORKFLOW";
+    display: block;
+    white-space: pre-wrap;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12pt;
+    font-weight: bold;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 3px double #000000;
+  }
+
+  .table-viewport,
+  .modern-table {
     border: none !important;
     box-shadow: none !important;
     width: 100% !important;
+    overflow: visible !important;
   }
-  
+
   .modern-table th {
     background-color: #f1f5f9 !important;
-    color: #0f172a !important;
-    border-bottom: 2px solid #cbd5e1 !important;
-    font-size: 11px !important;
+    color: #000000 !important;
+    border-bottom: 2px solid #000000 !important;
+    font-size: 9pt !important;
+    font-weight: 700 !important;
+    padding: 8px !important;
   }
-  
+
   .modern-table td {
-    border-bottom: 1px solid #e2e8f0 !important;
-    padding: 10px 8px !important;
-    font-size: 11px !important;
+    border-bottom: 1px solid #cbd5e1 !important;
+    padding: 8px !important;
+    font-size: 9pt !important;
+    color: #000000 !important;
+  }
+
+  /* Flatten CSS background colors to maximize visibility on matrix paper prints */
+  .category-pill {
+    background: none !important;
+    border: 1px solid #000000 !important;
+    color: #000000 !important;
+    padding: 2px 4px !important;
+  }
+
+  .status-badge {
+    background: none !important;
+    color: #000000 !important;
+    border: 1px solid #000000 !important;
+    font-weight: bold !important;
   }
 
   .row-maintenance {
     animation: none !important;
-    background-color: #fffbeb !important;
+    background-color: #fef3c7 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 }
