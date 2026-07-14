@@ -1,15 +1,17 @@
+// File path: centralog-ui/src/App.tsx
+
 import { useState, useEffect } from 'react';
-import { api, type Asset, type DashboardSummary, type PagedResult } from './services/api';
+import { api, assetApiEnriched, type Asset, type DashboardSummary, type PagedResult } from './services/api';
 import { useAuth } from './context/AuthContext';
-import { LoginModal } from './components/LoginModal'; // Injected gateway layout link
+import { LoginPortal } from './components/LoginPortal'; 
 import { Search, ShieldAlert, CheckCircle, RotateCw, Server, Package, Trash2, Layers, MapPin, Hash, DollarSign, ArrowLeftRight, Wrench, LogOut, UserCheck } from 'lucide-react';
 import './App.css';
 import { AssetDetailSidebar } from './components/AssetDetailSidebar';
+import { FinancialLedgerReport } from './components/FinancialLedgerReport';
 
 type LEDGER_THEMES = 'theme-obsidian' | 'theme-light' | 'theme-dmc';
 
 function App() {
-  // Pull security session parameters directly from the custom context core
   const { isAuthenticated, user, logoutSession, hasClearance } = useAuth();
   const [currentTheme, setCurrentTheme] = useState<LEDGER_THEMES>('theme-dmc');
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
@@ -69,18 +71,13 @@ function App() {
 
   const handleBulkTransferSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // UC-05 Enforcement: Verify clearance values before blasting network threads
     if (!hasClearance(['Manager', 'SystemAdmin'])) {
       setActionFeedback('Security Policy Violation: Account level lacks clearance authority to perform bulk updates.');
       return;
     }
     try {
-      const response = await api.post('/assets/bulk-transfer', {
-        assetIds: selectedAssetIds,
-        destinationRoomId: Number(destinationRoom),
-        newCustodianId: Number(newCustodian)
-      });
-      setActionFeedback(response.data.message);
+      const response = await assetApiEnriched.executeBulkTransfer(selectedAssetIds, Number(destinationRoom), Number(newCustodian));
+      setActionFeedback(response.message);
       setSelectedAssetIds([]);
       setShowTransferModal(false);
       loadDashboardMetrics();
@@ -106,16 +103,18 @@ function App() {
 
   const handleResolveMaintenance = async (assetId: number) => {
     try {
-      const response = await api.post(`/assets/${assetId}/maintenance/resolve`, {
+      // Safely dispatches our payload to the API gateway using the enriched module service
+      const response = await assetApiEnriched.resolveMaintenanceAction(assetId, {
         resolutionNotes: "Routine calibration workflow completed.",
         repairCost: 0.00,
-        targetState: 2
+        targetState: 2 // Maps to LifecycleState.Active
       });
-      setActionFeedback(response.data.message);
+      
+      setActionFeedback(response.message);
       loadDashboardMetrics();
       loadAssetsList(searchTerm);
     } catch (error: any) {
-      setActionFeedback(`Error: ${error.response?.data?.message || 'Resolution failed.'}`);
+      setActionFeedback(`Resolution failed: ${error.message || 'Action rejected.'}`);
     }
   };
 
@@ -133,11 +132,10 @@ function App() {
     }
   };
 
-  // --- INTERCEPTOR: Show gateway form layout if session is unauthenticated ---
   if (!isAuthenticated) {
     return (
       <div className={`app-viewport ${currentTheme}`}>
-        <LoginModal />
+        <LoginPortal />
       </div>
     );
   }
@@ -153,7 +151,6 @@ function App() {
           </div>
         </div>
 
-        {/* User Identity Banner Element */}
         {user && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', background: 'var(--surface-raised)', padding: '6px 14px', borderRadius: '6px', border: '1px solid var(--border)' }}>
             <UserCheck size={14} className="text-success" />
@@ -184,172 +181,171 @@ function App() {
         </div>
       )}
 
-      {summary && (
-        <section className="stats-container">
-          <div className="stat-card">
-            <div className="stat-info"><span className="stat-label">Total Managed Inventory</span><span className="stat-number">{summary.totalAssetCount}</span></div>
-            <div className="stat-icon-wrapper purple"><Package size={24} /></div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-info"><span className="stat-label">Operational Infrastructure</span><span className="stat-number text-success">{summary.activeCount}</span></div>
-            <div className="stat-icon-wrapper green"><CheckCircle size={24} /></div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-info"><span className="stat-label">Flagged Maintenance Nodes</span><span className="stat-number text-warning">{summary.inMaintenanceCount}</span></div>
-            <div className="stat-icon-wrapper yellow"><ShieldAlert size={24} /></div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-info"><span className="stat-label">Assessed Asset Value</span><span className="stat-number text-bright">₱{summary.totalSystemValue.toLocaleString()}</span></div>
-            <div className="stat-icon-wrapper balance"><DollarSign size={24} /></div>
-          </div>
-        </section>
-      )}
-
-      {selectedAssetIds.length > 0 && (
-        <div className="filter-panel" style={{ background: 'var(--surface)', padding: '16px', borderRadius: '8px', border: '1px solid var(--accent)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <span className="mono" style={{ fontSize: '14px' }}>Selected Matrix Tokens: <strong>{selectedAssetIds.length}</strong> items chosen.</span>
-          {/* Conditional Layout Visibility Check: Only allow rendering if role holds proper rights */}
-          {hasClearance(['Manager', 'SystemAdmin']) ? (
-            <button onClick={() => setShowTransferModal(true)} className="action-button primary"><ArrowLeftRight size={14} /> Authorize Bulk Transfer</button>
-          ) : (
-            <span style={{ fontSize: '12px', color: 'var(--clr-danger)' }}>Bulk adjustments locked for this profile level.</span>
+      {/* Hide extraneous dashboard elements if Accountant role is active to keep print layout clean */}
+      {user?.roleName !== 'Accountant' && (
+        <>
+          {summary && (
+            <section className="stats-container">
+              <div className="stat-card">
+                <div className="stat-info"><span className="stat-label">Total Managed Inventory</span><span className="stat-number">{summary.totalAssetCount}</span></div>
+                <div className="stat-icon-wrapper purple"><Package size={24} /></div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-info"><span className="stat-label">Operational Infrastructure</span><span className="stat-number text-success">{summary.activeCount}</span></div>
+                <div className="stat-icon-wrapper green"><CheckCircle size={24} /></div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-info"><span className="stat-label">Flagged Maintenance Nodes</span><span className="stat-number text-warning">{summary.inMaintenanceCount}</span></div>
+                <div className="stat-icon-wrapper yellow"><ShieldAlert size={24} /></div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-info"><span className="stat-label">Assessed Asset Value</span><span className="stat-number text-bright">₱{summary.totalSystemValue.toLocaleString()}</span></div>
+                <div className="stat-icon-wrapper balance"><DollarSign size={24} /></div>
+              </div>
+            </section>
           )}
-        </div>
-      )}
 
-      {showTransferModal && (
-        <div className="loader-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-          <form onSubmit={handleBulkTransferSubmit} style={{ background: 'var(--surface)', padding: '30px', borderRadius: '12px', border: '1px solid var(--border)', width: '400px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <h3 style={{ margin: 0 }}>Execute Grouped Relocation</h3>
-            <div>
-              <label style={{ display: 'block', marginBottom: '6px', fontSize: '12px' }}>Destination Room ID Code</label>
-              <select value={destinationRoom} onChange={(e) => setDestinationRoom(Number(e.target.value))} style={{ width: '100%', padding: '10px', background: 'var(--canvas)', color: 'var(--text-primary)', borderRadius: '6px', border: '1px solid var(--border)' }}>
-                <option value={101}>Room 101 (Admin Office)</option>
-                <option value={202}>Room 202 (Server Room)</option>
-                <option value={303}>Room 303 (Laboratory)</option>
-              </select>
+          {selectedAssetIds.length > 0 && (
+            <div className="filter-panel" style={{ background: 'var(--surface)', padding: '16px', borderRadius: '8px', border: '1px solid var(--accent)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <span className="mono" style={{ fontSize: '14px' }}>Selected Matrix Tokens: <strong>{selectedAssetIds.length}</strong> items chosen.</span>
+              {hasClearance(['Manager', 'SystemAdmin']) ? (
+                <button onClick={() => setShowTransferModal(true)} className="action-button primary"><ArrowLeftRight size={14} /> Authorize Bulk Transfer</button>
+              ) : (
+                <span style={{ fontSize: '12px', color: 'var(--clr-danger)' }}>Bulk adjustments locked for this profile level.</span>
+              )}
             </div>
-            <div>
-              <label style={{ display: 'block', marginBottom: '6px', fontSize: '12px' }}>New Custodian ID Assignment</label>
-              <select value={newCustodian} onChange={(e) => setNewCustodian(Number(e.target.value))} style={{ width: '100%', padding: '10px', background: 'var(--canvas)', color: 'var(--text-primary)', borderRadius: '6px', border: '1px solid var(--border)' }}>
-                <option value={1}>Custodian #1 (Systems Lead)</option>
-                <option value={2}>Custodian #2 (Network Admin)</option>
-              </select>
-            </div>
-            <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-              <button type="submit" className="action-button primary" style={{ flex: 1 }}>Commit Batch Transaction</button>
-              <button type="button" onClick={() => setShowTransferModal(false)} className="action-button secondary">Cancel</button>
-            </div>
-          </form>
-        </div>
-      )}
+          )}
 
-      {/* --- INSERTED COMPLIANCE EXPORTER TOOLBAR --- */}
-      {hasClearance(['Manager', 'SystemAdmin', 'Accountant']) && (
-        <section className="report-controls-deck">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600 }}>Compliance Export Controls</h3>
-            <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>
-              Generate legally binding balance sheets and unmodifiable asset tracking summaries[cite: 18, 39, 40].
-            </p>
-          </div>
-          <button 
-            onClick={triggerCompliancePrint} 
-            className="action-button primary" 
-            style={{ marginLeft: 'auto', backgroundColor: 'var(--clr-success)' }}
-          >
-            Export Tabular Report Ledger [cite: 39, 40]
-          </button>
-        </section>
-      )}
+          {showTransferModal && (
+            <div className="loader-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+              <form onSubmit={handleBulkTransferSubmit} style={{ background: 'var(--surface)', padding: '30px', borderRadius: '12px', border: '1px solid var(--border)', width: '400px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <h3 style={{ margin: 0 }}>Execute Grouped Relocation</h3>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '12px' }}>Destination Room ID Code</label>
+                  <select value={destinationRoom} onChange={(e) => setDestinationRoom(Number(e.target.value))} style={{ width: '100%', padding: '10px', background: 'var(--canvas)', color: 'var(--text-primary)', borderRadius: '6px', border: '1px solid var(--border)' }}>
+                    <option value={101}>Room 101 (Admin Office)</option>
+                    <option value={202}>Room 202 (Server Room)</option>
+                    <option value={303}>Room 303 (Laboratory)</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '12px' }}>New Custodian ID Assignment</label>
+                  <select value={newCustodian} onChange={(e) => setNewCustodian(Number(e.target.value))} style={{ width: '100%', padding: '10px', background: 'var(--canvas)', color: 'var(--text-primary)', borderRadius: '6px', border: '1px solid var(--border)' }}>
+                    <option value={1}>Custodian #1 (Systems Lead)</option>
+                    <option value={2}>Custodian #2 (Network Admin)</option>
+                  </select>
+                </div>
+                <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                  <button type="submit" className="action-button primary" style={{ flex: 1 }}>Commit Batch Transaction</button>
+                  <button type="button" onClick={() => setShowTransferModal(false)} className="action-button secondary">Cancel</button>
+                </div>
+              </form>
+            </div>
+          )}
 
-      <section className="filter-panel">
-        <form onSubmit={handleSearch} className="search-form">
-          <div className="input-group">
-            <Search size={18} className="search-icon" />
-            <input type="text" placeholder="Search assets by hardware descriptor or category tags..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-          </div>
-          <button type="submit" className="action-button primary">Execute Search</button>
-        </form>
-      </section>
+          {hasClearance(['Manager', 'SystemAdmin', 'Accountant']) && (
+            <section className="report-controls-deck">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600 }}>Compliance Export Controls</h3>
+                <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Generate legally binding balance sheets and unmodifiable asset tracking summaries.</p>
+              </div>
+              <button onClick={triggerCompliancePrint} className="action-button primary" style={{ marginLeft: 'auto', backgroundColor: 'var(--clr-success)' }}>Export Tabular Report Ledger</button>
+            </section>
+          )}
+
+          <section className="filter-panel">
+            <form onSubmit={handleSearch} className="search-form">
+              <div className="input-group">
+                <Search size={18} className="search-icon" />
+                <input type="text" placeholder="Search assets by hardware descriptor or category tags..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+              </div>
+              <button type="submit" className="action-button primary">Execute Search</button>
+            </form>
+          </section>
+        </>
+      )}
 
       <main className="content-deck">
-        {loading ? (
-          <div className="loader-overlay"><div className="spinner"></div><p>Querying live transactional tracking logs...</p></div>
+        {user?.roleName === 'Accountant' ? (
+          <FinancialLedgerReport />
         ) : (
-          <div className="table-viewport">
-            <table className="modern-table ledger-table">
-              <thead>
-                <tr>
-                  <th style={{ width: '40px' }}><input type="checkbox" disabled /></th>
-                  <th><Hash size={14} /> ID</th>
-                  <th>Hardware Descriptor</th>
-                  <th><Layers size={14} /> Classification</th>
-                  <th>Value Basis</th>
-                  <th><MapPin size={14} /> Deployment Hub</th>
-                  <th>Status Matrix / Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {assets.length > 0 ? (
-                  assets.map((asset) => (
-                    <tr 
-                      key={asset.id} 
-                      className={asset.isMaintenanceFlagged ? "row-maintenance flagged-row" : ""}
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => setActiveInspectedAsset(asset)} // Opens sidebar on row context tap
-                    >
-                      <td onClick={(e) => e.stopPropagation()}> {/* Stop check click from snapping panel open */}
-                        <input 
-                          type="checkbox" 
-                          checked={selectedAssetIds.includes(asset.id)}
-                          disabled={asset.lifecycleState === 5} 
-                          onChange={() => toggleSelectAsset(asset.id)} 
-                        />
-                      </td>
-                      <td className="mono mono-id">#{asset.id}</td>
-                      <td>
-                        <div className="asset-meta-cell">
-                          <span className="asset-primary-name">{asset.name}</span>
-                          <span className="asset-secondary-tag">System Identifier Hash: CL-ID-{asset.id} • Relational Handler Key: #{asset.custodianId}</span>
-                        </div>
-                      </td>
-                      <td><span className="category-pill">{asset.categoryTag}</span></td>
-                      <td className="price-text mono">₱{asset.procurementCost.toLocaleString()}</td>
-                      <td><span className="location-text mono">Room Reference: #{asset.roomId}</span></td>
-                      <td onClick={(e) => e.stopPropagation()}> {/* Stop action button click from snapping panel open */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          {getStatusBadge(asset.lifecycleState, asset.isMaintenanceFlagged)}
-                          
-                          {asset.lifecycleState === 2 && hasClearance(['Inventory Staff', 'Manager']) && (
-                            <button onClick={() => handleInitiateMaintenance(asset.id)} className="action-button secondary" style={{ padding: '4px 8px', fontSize: '11px' }}>
-                              <Wrench size={10} /> Lock for Repair
-                            </button>
-                          )}
-                          {asset.lifecycleState === 3 && hasClearance(['Inventory Staff', 'Manager']) && (
-                            <button onClick={() => handleResolveMaintenance(asset.id)} className="action-button primary" style={{ padding: '4px 8px', fontSize: '11px' }}>
-                              <CheckCircle size={10} /> Resolve Repairs
-                            </button>
-                          )}
-                        </div>
+          loading ? (
+            <div className="loader-overlay"><div className="spinner"></div><p>Querying live transactional tracking logs...</p></div>
+          ) : (
+            <div className="table-viewport">
+              <table className="modern-table ledger-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '40px' }}><input type="checkbox" disabled /></th>
+                    <th><Hash size={14} /> ID</th>
+                    <th>Hardware Descriptor</th>
+                    <th><Layers size={14} /> Classification</th>
+                    <th>Value Basis</th>
+                    <th><MapPin size={14} /> Deployment Hub</th>
+                    <th>Status Matrix / Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {assets.length > 0 ? (
+                    assets.map((asset) => (
+                      <tr 
+                        key={asset.id} 
+                        className={asset.isMaintenanceFlagged ? "row-maintenance flagged-row" : ""}
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => setActiveInspectedAsset(asset)}
+                      >
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <input 
+                            type="checkbox" 
+                            checked={selectedAssetIds.includes(asset.id)}
+                            disabled={asset.lifecycleState === 5} 
+                            onChange={() => toggleSelectAsset(asset.id)} 
+                          />
+                        </td>
+                        <td className="mono">#{asset.id}</td>
+                        <td>
+                          <div className="asset-meta-cell">
+                            <span className="asset-primary-name">{asset.name}</span>
+                            <span className="asset-secondary-tag">System Identifier Hash: CL-ID-{asset.id} • Relational Handler Key: #{asset.custodianId}</span>
+                          </div>
+                        </td>
+                        <td><span className="category-pill">{asset.categoryTag}</span></td>
+                        <td className="price-text mono">₱{asset.procurementCost.toLocaleString()}</td>
+                        <td><span className="location-text mono">Room Reference: #{asset.roomId}</span></td>
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {getStatusBadge(asset.lifecycleState, asset.isMaintenanceFlagged)}
+                            
+                            {asset.lifecycleState === 2 && hasClearance(['Inventory Staff', 'Manager']) && (
+                              <button onClick={() => handleInitiateMaintenance(asset.id)} className="action-button secondary" style={{ padding: '4px 8px', fontSize: '11px' }}>
+                                <Wrench size={10} /> Lock for Repair
+                              </button>
+                            )}
+                            {asset.lifecycleState === 3 && hasClearance(['Inventory Staff', 'Manager']) && (
+                              <button onClick={() => handleResolveMaintenance(asset.id)} className="action-button primary" style={{ padding: '4px 8px', fontSize: '11px' }}>
+                                <CheckCircle size={10} /> Resolve Repairs
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={7} className="empty-state-cell">
+                        <Trash2 size={40} className="empty-icon" />
+                        <h3>No Operational Records Found</h3>
+                        <p>Adjust your search text to hit alternative partitions.</p>
                       </td>
                     </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={7} className="empty-state-cell">
-                      <Trash2 size={40} className="empty-icon" />
-                      <h3>No Operational Records Found</h3>
-                      <p>Adjust your search text to hit alternative partitions.</p>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )
         )}
       </main>
-      {/* --- SIDEBAR PANEL INFRASTRUCTURE MOUNT --- */}
+
       <AssetDetailSidebar 
         asset={activeInspectedAsset}
         onClose={() => setActiveInspectedAsset(null)}
