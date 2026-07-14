@@ -27,5 +27,7 @@ namespace CentraLog.Core.Interfaces
         Task<Asset> GetAssetByIdAsync(int id, CancellationToken cancellationToken = default);
 
         Task<bool> ExecuteBulkTransferAsync(BulkTransferRequestDto dto, int adminUserId, CancellationToken cancellationToken = default);
+
+        Task<DepreciationLedgerReportDto> GetDepreciationLedgerReportAsync(CancellationToken cancellationToken = default);
     }
 }

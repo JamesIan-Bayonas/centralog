@@ -25,11 +25,35 @@ builder.Services.AddSwaggerGen();
 // Inject the Relational Database Context using Pomelo MySQL Configuration Engine
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
+// File path: CentraLog.API/Program.cs
+// Insert this debug snippet right before builder.Services.AddDbContext to log configuration states:
+
+var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
+var initLogger = loggerFactory.CreateLogger("ProductionHandshakeDiagnostic");
+
+var dbConnectionToVerify = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrEmpty(dbConnectionToVerify) || dbConnectionToVerify.Contains("localhost"))
+{
+    initLogger.LogCritical("CRITICAL ARCHITECTURAL WARNING: Deployed environment is using a LOCALHOST database connection string mapping!");
+}
+else
+{
+    initLogger.LogInformation("Database connection string string parsed successfully. Target Host Node: {Host}",
+        dbConnectionToVerify.Split(';').FirstOrDefault(x => x.StartsWith("Server", StringComparison.OrdinalIgnoreCase)));
+}
+
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseMySql(
         connectionString,
         new MySqlServerVersion(new Version(8, 0, 30)),
-        b => b.MigrationsAssembly("CentraLog.Infrastructure")
+        mySqlOptions => mySqlOptions
+            .MigrationsAssembly("CentraLog.Infrastructure")
+            // REPAIR ADDITION: Enables automated retry loops to bypass transient cloud database sleep drops safely
+            .EnableRetryOnFailure(
+                maxRetryCount: 5,
+                maxRetryDelay: TimeSpan.FromSeconds(10),
+                errorNumbersToAdd: null
+            )
     ));
 
 builder.Services.AddScoped<IAssetService, AssetService>();
@@ -71,7 +95,7 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 // =========================================================================
-// 2. HTTP REQUEST PIPELINE CONFIGURATION (MIDDLEWARE STACK)
+// 2. HTTP REQUEST PIPELINE CONIGURATION (MIDDLEWARE STACK)
 // =========================================================================
 
 app.UseMiddleware<GlobalExceptionMiddleware>();
@@ -81,7 +105,7 @@ app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
     c.SwaggerEndpoint("/swagger/v1/swagger.json", "My API V1");
-    c.RoutePrefix = string.Empty; // ◄── Re-enabled: Root domain now shows documentation panels
+    //c.RoutePrefix = string.Empty; // ◄── Re-enabled: Root domain now shows documentation panels
 });
 
 app.UseHttpsRedirection();
@@ -92,15 +116,35 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 // =========================================================================
-// 3. DATABASE MIGRATION & SEEDING ENGINE DISPATCH
+// 3. DATABASE MIGRATION & SEEDING ENGINE DISPATCH (SAFE ENVIRONMENT LIFECYCLE)
 // =========================================================================
 using (var scope = app.Services.CreateScope())
-{
+{ 
     var services = scope.ServiceProvider;
     try
     {
         var context = services.GetRequiredService<ApplicationDbContext>();
-        await context.Database.MigrateAsync();
+        var env = services.GetRequiredService<IWebHostEnvironment>();
+
+        if (env.IsDevelopment())
+        {
+            var logger = services.GetRequiredService<ILogger<Program>>();
+            logger.LogWarning("Development partition active: Wiping and recreating local relational database nodes...");
+
+            // Only perform hard drops locally inside your XAMPP boundary sandbox
+            await context.Database.EnsureDeletedAsync();
+            await context.Database.MigrateAsync();
+        }
+        else
+        {
+            // SAFE CLOUD EXECUTION FOR MONSTERASP PRODUCTION TARGETS
+            // Bypasses drops entirely and applies incremental scheme changes safely
+            var logger = services.GetRequiredService<ILogger<Program>>();
+            logger.LogInformation("Production cloud instance active: Applying structural schema updates incrementally...");
+            await context.Database.MigrateAsync();
+        }
+
+        // Programmatically seeds default operators (admin_cl, manager_cl, staff_cl) safely if empty
         await DatabaseSeeder.SeedAsync(context);
     }
     catch (Exception ex)
@@ -113,3 +157,5 @@ using (var scope = app.Services.CreateScope())
 app.MapControllers();
 
 app.Run();
+
+public partial class Program { }
