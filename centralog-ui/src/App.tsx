@@ -89,32 +89,34 @@ function App() {
 
   const handleInitiateMaintenance = async (assetId: number) => {
     try {
-      const response = await api.patch(`/assets/${assetId}/maintenance/initiate`, {
-        issueDescription: "Threshold alert tripped.",
+      // Dispatches the payload directly to the .NET API via the unified interceptor stack
+      const response = await assetApiEnriched.initiateMaintenanceAction(assetId, {
+        issueDescription: "Threshold alert tripped. Transferred automatically to diagnostic calibration loop.",
         isUrgent: true
-      });
-      setActionFeedback(response.data.message);
-      loadDashboardMetrics();
-      loadAssetsList(searchTerm);
-    } catch (error: any) {
-      setActionFeedback(`Error: ${error.response?.data?.message || 'Action rejected.'}`);
-    }
-  };
-
-  const handleResolveMaintenance = async (assetId: number) => {
-    try {
-      // Safely dispatches our payload to the API gateway using the enriched module service
-      const response = await assetApiEnriched.resolveMaintenanceAction(assetId, {
-        resolutionNotes: "Routine calibration workflow completed.",
-        repairCost: 0.00,
-        targetState: 2 // Maps to LifecycleState.Active
       });
       
       setActionFeedback(response.message);
-      loadDashboardMetrics();
-      loadAssetsList(searchTerm);
+      await loadDashboardMetrics();
+      await loadAssetsList(searchTerm);
     } catch (error: any) {
-      setActionFeedback(`Resolution failed: ${error.message || 'Action rejected.'}`);
+      setActionFeedback(`Action Rejected: ${error.message || 'Clearance policy verification failure.'}`);
+    }
+  };
+
+ const handleResolveMaintenance = async (assetId: number) => {
+    try {
+      // Dispatches the final resolution metadata cleanly to clear the database block
+      const response = await assetApiEnriched.resolveMaintenanceAction(assetId, {
+        resolutionNotes: "Routine calibration workflow completed under standard deployment parameters.",
+        repairCost: 0.00,
+        targetState: 2 // Maps back cleanly to LifecycleState.Active
+      });
+      
+      setActionFeedback(response.message);
+      await loadDashboardMetrics();
+      await loadAssetsList(searchTerm);
+    } catch (error: any) {
+      setActionFeedback(`Resolution Failed: ${error.message || 'Action rejected.'}`);
     }
   };
 
@@ -253,6 +255,78 @@ function App() {
             </section>
           )}
 
+          {/* File path: centralog-ui/src/App.tsx */}
+          {/* COOPERATIVE ASSET ONBOARDING DRAWER - EXPOSED TO CUSTODIANS AND MANAGERS */}
+          {hasClearance(['Inventory Staff', 'InventoryStaff', 'Manager', 'SystemAdmin']) && (
+            <section className="filter-panel" style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border)', marginBottom: '24px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', borderBottom: '1px solid var(--border)', paddingBottom: '10px' }}>
+                <Package size={18} className="text-bright" />
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>Log New Procurement Asset Entry</h3>
+              </div>
+              
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                const form = e.currentTarget;
+                const formData = new FormData(form);
+                
+                const payload = {
+                  name: String(formData.get('assetName')).trim(),
+                  categoryTag: String(formData.get('categoryTag')).trim(),
+                  procurementCost: Number(formData.get('procurementCost')),
+                  roomId: Number(formData.get('roomId')),
+                  custodianId: Number(formData.get('custodianId'))
+                };
+
+                try {
+                  setActionFeedback("Registering asset inside database context...");
+                  const result = await assetApiEnriched.importAssetRegistryBatch([payload]);
+                  setActionFeedback(result.message);
+                  form.reset();
+                  await loadDashboardMetrics();
+                  await loadAssetsList(searchTerm);
+                } catch (err: any) {
+                  setActionFeedback(`Registration Failure: ${err.message || 'Validation error.'}`);
+                }
+              }} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px', alignItems: 'end' }}>
+                
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase' }}>Hardware Name</label>
+                  <input type="text" name="assetName" required placeholder="e.g., Lenovo Legion R7" style={{ width: '100%', boxSizing: 'border-box', padding: '10px', backgroundColor: 'var(--canvas)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: '4px', outline: 'none' }} />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase' }}>Classification Category</label>
+                  <input type="text" name="categoryTag" required placeholder="e.g., Workstations" style={{ width: '100%', boxSizing: 'border-box', padding: '10px', backgroundColor: 'var(--canvas)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: '4px', outline: 'none' }} />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase' }}>Procurement Cost (₱)</label>
+                  <input type="number" name="procurementCost" required min="1" placeholder="65000" style={{ width: '100%', boxSizing: 'border-box', padding: '10px', backgroundColor: 'var(--canvas)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: '4px', outline: 'none' }} />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase' }}>Physical Room Allocation</label>
+                  <select name="roomId" style={{ width: '100%', boxSizing: 'border-box', padding: '10px', backgroundColor: 'var(--canvas)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: '4px', outline: 'none', height: '38px' }}>
+                    <option value="101">Room 101 (Admin Office)</option>
+                    <option value="202">Room 202 (Server Room)</option>
+                    <option value="303">Room 303 (Laboratory)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase' }}>Assigned Handler Custodian</label>
+                  <select name="custodianId" style={{ width: '100%', boxSizing: 'border-box', padding: '10px', backgroundColor: 'var(--canvas)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: '4px', outline: 'none', height: '38px' }}>
+                    <option value="1">Custodian #1 (Systems Lead)</option>
+                    <option value="2">Custodian #2 (Network Admin)</option>
+                  </select>
+                </div>
+
+                <button type="submit" className="action-button primary" style={{ height: '38px', justifyContent: 'center', width: '100%', fontWeight: 600 }}>
+                  Commit Registry Entry
+                </button>
+              </form>
+            </section>
+          )}
           <section className="filter-panel">
             <form onSubmit={handleSearch} className="search-form">
               <div className="input-group">
