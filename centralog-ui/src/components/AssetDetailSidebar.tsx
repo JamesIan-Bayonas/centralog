@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
-import { api, type Asset, DepreciationMethodMap, LifecycleStateMap } from '../services/api';
+// File path: centralog-ui/src/components/AssetDetailSidebar.tsx
+
+import React, { useState, useEffect } from 'react';
+import { assetApi, type Asset, type AssetHistoryDto, DepreciationMethodMap, LifecycleStateMap } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { X, ShieldAlert, TrendingDown, Calendar, HardDrive, Settings, Trash2 } from 'lucide-react';
+import { X, ShieldAlert, TrendingDown, Calendar, HardDrive, Settings, Trash2, History } from 'lucide-react';
 
 interface AssetDetailSidebarProps {
   asset: Asset | null;
@@ -21,6 +23,35 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
   const [disposalReason, setDisposalReason] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
+  // Feature 9 local data tracking hooks
+  const [historyTimeline, setHistoryTimeline] = useState<AssetHistoryDto | null>(null);
+  const [isTimelineLoading, setIsTimelineLoading] = useState<boolean>(false);
+  const [timelineError, setTimelineError] = useState<string | null>(null);
+
+  // Query audit history whenever a new asset instance is selected
+  useEffect(() => {
+    if (!asset) {
+      setHistoryTimeline(null);
+      return;
+    }
+
+    const fetchAuditTimelineData = async () => {
+      setIsTimelineLoading(true);
+      setTimelineError(null);
+      try {
+        const data = await assetApi.getAssetHistory(asset.id);
+        setHistoryTimeline(data);
+      } catch (err: any) {
+        console.error('Timeline retrieval failed:', err);
+        setTimelineError(err.message || 'Failed to pull audit trail records.');
+      } finally {
+        setIsTimelineLoading(false);
+      }
+    };
+
+    fetchAuditTimelineData();
+  }, [asset]);
+
   if (!asset) return null;
 
   const stateMeta = LifecycleStateMap[asset.lifecycleState] || { label: 'Unknown', color: 'gray' };
@@ -33,10 +64,7 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
     
     setIsProcessing(true);
     try {
-      await api.post(`/assets/${asset.id}/dispose`, {
-        disposalReason: disposalReason || "Routine structural retirement sweep.",
-        scrapRecoveryValue: Number(scrapValue)
-      });
+      await assetApi.disposeAsset(asset.id, disposalReason || "Routine structural retirement sweep.", Number(scrapValue));
       alert("Asset successfully removed from active capitalization registers.");
       onClose();
       window.location.reload(); // Force core ledger state synchronization
@@ -128,6 +156,50 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
           </div>
         </div>
 
+        {/* FEATURE 9: IMMUTABLE AUDIT TRAIL CHRONOLOGICAL TIMELINE CHIP */}
+        <div>
+          <h4 style={{ margin: '0 0 12px 0', fontSize: '13px', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <History size={14} /> System Interaction & Audit Logs
+          </h4>
+          
+          <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: '8px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {isTimelineLoading && (
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>Syncing chronological log registry...</span>
+            )}
+            
+            {timelineError && (
+              <span style={{ fontSize: '12px', color: 'var(--clr-danger)' }}>{timelineError}</span>
+            )}
+
+            {!isTimelineLoading && !timelineError && historyTimeline && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', position: 'relative' }}>
+                {historyTimeline.timelineEntries.length === 0 ? (
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No historical relocations logged for this resource mapping node.</span>
+                ) : (
+                  historyTimeline.timelineEntries.map((log) => (
+                    <div key={log.logId} style={{ borderLeft: '2px solid var(--accent)', paddingLeft: '12px', marginLeft: '4px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px' }}>
+                        <span style={{ color: 'var(--fb-warning)', fontWeight: 600 }}>@{log.operatorUsername}</span>
+                        <span style={{ color: 'var(--text-muted)' }}>{new Date(log.timestamp).toLocaleString()}</span>
+                      </div>
+                      <span style={{ fontSize: '12px', color: 'var(--text-primary)' }}>
+                        {log.oldRoomId !== log.newRoomId ? (
+                          <>Transferred layout from <strong>{log.oldRoomName}</strong> to <strong>{log.newRoomName}</strong>.</>
+                        ) : (
+                          <>Asset status verified/decommissioned natively inside current workspace.</>
+                        )}
+                      </span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                        Assigned Custodian: {log.newCustodianName}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Manager-Exclusive Asset Decommission Form Panel */}
         {asset.lifecycleState !== 5 && hasClearance(['Manager', 'SystemAdmin']) && (
           <div style={{ border: '1px dashed var(--clr-danger)', padding: '16px', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '12px', background: 'rgba(239, 68, 68, 0.02)' }}>
@@ -168,35 +240,43 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
         )}
 
       </div>
-
-      {/* Contextual Action Execution Drawer */}
-      {hasClearance(['Inventory Staff', 'Manager']) && (
+      
+      {/* Contextual Action Execution Drawer - Enhanced with Interactive Resolution Fields */}
+     {/* Contextual Action Execution Drawer - Enhanced with Multi-Type Model Parsing */}
+      {hasClearance(['Inventory Staff', 'Manager', 'SystemAdmin', 'InventoryStaff']) && (
         <div style={{ padding: '24px', borderTop: '1px solid var(--border)', background: 'var(--surface-raised)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <h4 style={{ margin: 0, fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <h4 style={{ margin: 0, fontSize: '11px', textTransform: 'uppercase', color: '#fff', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Settings size={12} /> Sequential Lifecycle Phase Advance
           </h4>
           
-          {asset.lifecycleState === 2 && (
+          {/* SAFE CHECK: Handles both numeric enum evaluation (2) and serialized string representation ("Active") */}
+          {(asset.lifecycleState === 2 || String(asset.lifecycleState).toLowerCase() === 'active') && (
             <button 
               onClick={() => onInitiateMaintenance(asset.id)}
               className="action-button secondary" 
-              style={{ width: '100%', padding: '12px', justifyContent: 'center', color: 'var(--clr-warning)', borderColor: 'var(--clr-warning)' }}
+              style={{ width: '100%', padding: '12px', justifyContent: 'center', color: 'var(--clr-warning)', borderColor: 'var(--clr-warning)', cursor: 'pointer', fontWeight: 600, borderRadius: '4px' }}
             >
               Transfer Out to Active Repair Loop
             </button>
           )}
 
-          {asset.lifecycleState === 3 && (
-            <button 
-              onClick={() => onResolveMaintenance(asset.id)}
-              className="action-button primary" 
-              style={{ width: '100%', padding: '12px', justifyContent: 'center' }}
-            >
-              Sign Off Calibration Workflow Completion
-            </button>
+          {/* SAFE CHECK: Handles both numeric enum evaluation (3) and serialized string representation ("InMaintenance") */}
+          {(asset.lifecycleState === 3 || String(asset.lifecycleState).toLowerCase() === 'inmaintenance') && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: '6px' }}>
+              <span style={{ fontSize: '11px', color: '#fff', fontWeight: 600 }}>CLOSE OUT TRACKING MAINTENANCE LOG</span>
+              
+              <button 
+                onClick={() => onResolveMaintenance(asset.id)}
+                className="action-button primary" 
+                style={{ width: '100%', padding: '12px', justifyContent: 'center', cursor: 'pointer', fontWeight: 600, backgroundColor: 'var(--clr-success)', border: 'none', color: '#fff', borderRadius: '4px' }}
+              >
+                Confirm Repair Completion & Unfreeze Asset
+              </button>
+            </div>
           )}
 
-          {asset.lifecycleState === 5 && (
+          {/* SAFE CHECK: Handles decommissioned termination boundaries */}
+          {(asset.lifecycleState === 5 || String(asset.lifecycleState).toLowerCase() === 'disposed') && (
             <span style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', display: 'block' }}>
               This resource matrix node is structurally finalized and unmodifiable.
             </span>
