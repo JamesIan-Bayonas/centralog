@@ -1,4 +1,5 @@
-﻿using System;
+﻿// CentraLog.Core/Domain/Entities/Asset.cs
+using System;
 using CentraLog.Core.Domain.Enums;
 
 namespace CentraLog.Core.Domain.Entities
@@ -19,5 +20,14 @@ namespace CentraLog.Core.Domain.Entities
         public int ExpectedLifespanMonths { get; set; } = 60;
         public DepreciationAlgorithm DepreciationMethod { get; set; } = DepreciationAlgorithm.StraightLine;
         public decimal SalvageValue { get; set; } = 0.00m;
+
+        // --- INSTITUTIONAL PROPERTY EXTENSIONS ---
+        public string PropertyNumber { get; set; } = string.Empty;
+        public string SerialNumber { get; set; } = string.Empty;
+        public DateTime AcquisitionDate { get; set; } = DateTime.UtcNow;
+        public string AccountCategory { get; set; } = string.Empty;
+        public string? ImageUrl { get; set; }
+        public bool IsStickerQueued { get; set; } = false;
+        public string Description { get; set; } = string.Empty;
     }
 }
