@@ -3,20 +3,22 @@
 import React, { useState, useEffect } from 'react';
 import { assetApi, type Asset, type AssetHistoryDto, DepreciationMethodMap, LifecycleStateMap } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { X, ShieldAlert, TrendingDown, Calendar, HardDrive, Settings, Trash2, History } from 'lucide-react';
+import { X, ShieldAlert, TrendingDown, Calendar, HardDrive, Settings, Trash2, History, Maximize2 } from 'lucide-react';
 
 interface AssetDetailSidebarProps {
   asset: Asset | null;
   onClose: () => void;
   onInitiateMaintenance: (id: number) => Promise<void>;
   onResolveMaintenance: (id: number) => Promise<void>;
+  onOpenOverview: (id: number) => void;
 }
 
 export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
   asset,
   onClose,
   onInitiateMaintenance,
-  onResolveMaintenance
+  onResolveMaintenance,
+  onOpenOverview
 }) => {
   const { hasClearance } = useAuth();
   const [scrapValue, setScrapValue] = useState<string>('0');
@@ -248,6 +250,15 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
           <h4 style={{ margin: 0, fontSize: '11px', textTransform: 'uppercase', color: '#fff', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Settings size={12} /> Sequential Lifecycle Phase Advance
           </h4>
+          
+          {/* AEGIS INJECTION: Render the routing button for the full property dashboard */}
+          <button 
+            onClick={() => onOpenOverview(asset.id)}
+            className="action-button primary" 
+            style={{ width: '100%', padding: '12px', justifyContent: 'center', fontWeight: 600, backgroundColor: 'var(--accent)', border: 'none', color: '#fff', borderRadius: '4px', marginBottom: '8px' }}
+          >
+            <Maximize2 size={16} style={{ marginRight: '8px' }}/> Inspect Full Property Dashboard
+          </button>
           
           {/* SAFE CHECK: Handles both numeric enum evaluation (2) and serialized string representation ("Active") */}
           {(asset.lifecycleState === 2 || String(asset.lifecycleState).toLowerCase() === 'active') && (
