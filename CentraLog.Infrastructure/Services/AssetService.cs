@@ -1,5 +1,4 @@
-﻿// File path: CentraLog.Infrastructure/Services/AssetService.cs
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -46,7 +45,6 @@ namespace CentraLog.Infrastructure.Services
                 totalDepreciatedSystemValue += CalculateDepreciatedValue(asset, allMaintenanceLogs);
             }
 
-            // Group inventory metadata dynamically by category classification tags to feed charts
             var distribution = assets
                 .GroupBy(a => a.CategoryTag)
                 .ToDictionary(g => g.Key, g => g.Count());
@@ -58,7 +56,7 @@ namespace CentraLog.Infrastructure.Services
                 ActiveCount = assets.Count(a => a.LifecycleState == LifecycleState.Active),
                 InMaintenanceCount = assets.Count(a => a.LifecycleState == LifecycleState.InMaintenance),
                 DisposedCount = assets.Count(a => a.LifecycleState == LifecycleState.Disposed),
-                CategoryDistribution = distribution // ◄── Patched from vacant to operational
+                CategoryDistribution = distribution
             };
         }
 
@@ -235,9 +233,6 @@ namespace CentraLog.Infrastructure.Services
             return assetsToInsert.Count;
         }
 
-        // =========================================================================
-        // FEATURE 9: REAL-TIME AUDIT LOG TRAIL PROJECTOR (ENRICHED PROJECTOR FEED)
-        // =========================================================================
         public async Task<AssetHistoryDto> GetAssetHistoryAsync(int assetId, CancellationToken cancellationToken = default)
         {
             var asset = await _context.Assets.FirstOrDefaultAsync(a => a.Id == assetId, cancellationToken);
@@ -297,9 +292,6 @@ namespace CentraLog.Infrastructure.Services
             };
         }
 
-        // File path: CentraLog.Infrastructure/Services/AssetService.cs
-        // Append this method inside your existing AssetService class container:
-
         public async Task<DepreciationLedgerReportDto> GetDepreciationLedgerReportAsync(CancellationToken cancellationToken = default)
         {
             var assets = await _context.Assets.ToListAsync(cancellationToken);
@@ -344,14 +336,12 @@ namespace CentraLog.Infrastructure.Services
             using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
             try
             {
-                // 1. Locate the target hardware asset record
                 var asset = await _context.Assets.FirstOrDefaultAsync(a => a.Id == assetId, cancellationToken);
                 if (asset == null)
                 {
                     throw new KeyNotFoundException($"Resolution rejected: Asset ID {assetId} does not exist in relational nodes.");
                 }
 
-                // 2. Validate current lifecycle state intersection
                 if (asset.LifecycleState != LifecycleState.InMaintenance)
                 {
                     throw new InvalidOperationException($"Resolution rejected: Asset ID {assetId} is currently in an active state of '{asset.LifecycleState}' and cannot be extracted from a non-existent repair loop.");
@@ -359,7 +349,6 @@ namespace CentraLog.Infrastructure.Services
 
                 var timestamp = DateTime.UtcNow;
 
-                // 3. Extract the active, uncompleted maintenance log row
                 var activeLog = await _context.MaintenanceLogs
                     .Where(m => m.AssetId == assetId && m.EndTime == null)
                     .OrderByDescending(m => m.StartTime)
@@ -370,18 +359,15 @@ namespace CentraLog.Infrastructure.Services
                     throw new InvalidOperationException($"Relational database mismatch: Asset ID {assetId} is flagged InMaintenance, but no open log profile exists.");
                 }
 
-                // 4. Update the historical tracking matrix boundaries
                 activeLog.EndTime = timestamp;
                 activeLog.ResolutionNotes = dto.ResolutionNotes.Trim();
                 activeLog.RepairCost = dto.RepairCost;
                 activeLog.PerformedByUserId = adminUserId;
 
-                // 5. Restore asset states to execute standard depreciation models downstream
-                asset.LifecycleState = dto.TargetState; // Defaults to LifecycleState.Active
+                asset.LifecycleState = dto.TargetState;
                 asset.IsMaintenanceFlagged = false;
                 asset.UpdatedAt = timestamp;
 
-                // 6. Force append data modifications to the transactional audit logs table
                 var auditLog = new AuditLog
                 {
                     AssetId = asset.Id,
@@ -403,6 +389,134 @@ namespace CentraLog.Infrastructure.Services
             {
                 await transaction.RollbackAsync(cancellationToken);
                 throw new TimeoutException("Database connection timeout or concurrency deadlock encountered. Transaction aborted.");
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
+        }
+
+        // --- INSTITUTIONAL PROPERTY EXTENSION IMPLEMENTATIONS ---
+
+        public async Task<bool> UpdatePropertyAsync(int assetId, UpdatePropertyCommandDto dto, int adminUserId, CancellationToken cancellationToken = default)
+        {
+            var asset = await _context.Assets.FirstOrDefaultAsync(a => a.Id == assetId, cancellationToken);
+            if (asset == null) throw new KeyNotFoundException($"Property ID #{assetId} missing.");
+            if (asset.LifecycleState == LifecycleState.Disposed)
+            {
+                throw new InvalidOperationException("Cannot modify retired/disposed property entries.");
+            }
+
+            var timestamp = DateTime.UtcNow;
+            asset.Name = dto.Name;
+            asset.PropertyNumber = dto.PropertyNumber;
+            asset.SerialNumber = dto.SerialNumber;
+            asset.AccountCategory = dto.AccountCategory;
+            asset.CategoryTag = dto.CategoryTag;
+            asset.ProcurementCost = dto.ProcurementCost;
+            asset.AcquisitionDate = dto.AcquisitionDate;
+            asset.Description = dto.Description;
+            asset.ImageUrl = dto.ImageUrl;
+            asset.UpdatedAt = timestamp;
+
+            await _context.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+
+        public async Task<bool> UpdateCustodianAssignmentAsync(int assetId, UpdateCustodianCommandDto dto, int adminUserId, CancellationToken cancellationToken = default)
+        {
+            using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                var asset = await _context.Assets.FirstOrDefaultAsync(a => a.Id == assetId, cancellationToken);
+                if (asset == null) throw new KeyNotFoundException($"Property ID #{assetId} missing.");
+                if (asset.LifecycleState == LifecycleState.Disposed || asset.LifecycleState == LifecycleState.InMaintenance)
+                {
+                    throw new InvalidOperationException($"Property ID #{assetId} cannot be reassigned while in maintenance or disposed states.");
+                }
+
+                var timestamp = DateTime.UtcNow;
+
+                var auditLog = new AuditLog
+                {
+                    AssetId = asset.Id,
+                    OldRoomId = asset.RoomId,
+                    NewRoomId = dto.NewRoomId,
+                    OldCustodianId = asset.CustodianId,
+                    NewCustodianId = dto.NewCustodianId,
+                    ModifiedByUserId = adminUserId,
+                    Timestamp = timestamp
+                };
+
+                asset.CustodianId = dto.NewCustodianId;
+                asset.RoomId = dto.NewRoomId;
+                asset.UpdatedAt = timestamp;
+
+                await _context.AuditLogs.AddAsync(auditLog, cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return true;
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
+        }
+
+        public async Task<bool> ToggleStickerQueueAsync(int assetId, CancellationToken cancellationToken = default)
+        {
+            var asset = await _context.Assets.FirstOrDefaultAsync(a => a.Id == assetId, cancellationToken);
+            if (asset == null) throw new KeyNotFoundException($"Property ID #{assetId} missing.");
+
+            asset.IsStickerQueued = !asset.IsStickerQueued;
+            asset.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync(cancellationToken);
+            return asset.IsStickerQueued;
+        }
+
+        public async Task<List<Asset>> GetStickerQueueAsync(CancellationToken cancellationToken = default)
+        {
+            return await _context.Assets
+                .Where(a => a.IsStickerQueued)
+                .ToListAsync(cancellationToken);
+        }
+
+        // Append this method inside CentraLog.Infrastructure.Services.AssetService class:
+
+        public async Task<bool> VerifyInventoryAsync(int assetId, int adminUserId, CancellationToken cancellationToken = default)
+        {
+            using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                var asset = await _context.Assets.FirstOrDefaultAsync(a => a.Id == assetId, cancellationToken);
+                if (asset == null) throw new KeyNotFoundException($"Property ID #{assetId} missing from database context.");
+                if (asset.LifecycleState == LifecycleState.Disposed)
+                {
+                    throw new InvalidOperationException("Cannot record physical inventory for decommissioned property entries.");
+                }
+
+                var timestamp = DateTime.UtcNow;
+
+                var auditLog = new AuditLog
+                {
+                    AssetId = asset.Id,
+                    OldRoomId = asset.RoomId,
+                    NewRoomId = asset.RoomId,
+                    OldCustodianId = asset.CustodianId,
+                    NewCustodianId = asset.CustodianId,
+                    ModifiedByUserId = adminUserId,
+                    Timestamp = timestamp
+                };
+
+                asset.UpdatedAt = timestamp;
+
+                await _context.AuditLogs.AddAsync(auditLog, cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return true;
             }
             catch (Exception)
             {

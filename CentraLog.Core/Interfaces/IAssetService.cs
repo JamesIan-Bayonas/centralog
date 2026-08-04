@@ -25,5 +25,6 @@ namespace CentraLog.Core.Interfaces
         Task<bool> UpdateCustodianAssignmentAsync(int assetId, UpdateCustodianCommandDto dto, int adminUserId, CancellationToken cancellationToken = default);
         Task<bool> ToggleStickerQueueAsync(int assetId, CancellationToken cancellationToken = default);
         Task<List<Asset>> GetStickerQueueAsync(CancellationToken cancellationToken = default);
+        Task<bool> VerifyInventoryAsync(int assetId, int adminUserId, CancellationToken cancellationToken = default);
     }
 }

@@ -280,5 +280,25 @@ namespace CentraLog.API.Controllers
             var queue = await _assetService.GetStickerQueueAsync(cancellationToken);
             return Ok(queue);
         }
+
+        // Append this controller action method inside CentraLog.API.Controllers.AssetController class:
+
+        [HttpPost("{id:int}/verify-inventory")]
+        [Authorize(Roles = "Manager,InventoryStaff,SystemAdmin")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> VerifyInventory([FromRoute] int id, CancellationToken cancellationToken)
+        {
+            try
+            {
+                int userId = GetCurrentUserId();
+                await _assetService.VerifyInventoryAsync(id, userId, cancellationToken);
+                return Ok(new { message = $"Physical inventory audit recorded successfully for Property #{id}." });
+            }
+            catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+            catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+        }
     }
 }

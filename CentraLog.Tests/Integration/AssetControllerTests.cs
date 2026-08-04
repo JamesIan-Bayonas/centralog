@@ -1,5 +1,4 @@
-﻿// File path: CentraLog.Tests/Integration/AssetControllerTests.cs
-using CentraLog.Core.Domain.Enums;
+﻿using CentraLog.Core.Domain.Enums;
 using CentraLog.Core.DTOs;
 using CentraLog.Infrastructure.Data;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -39,7 +38,7 @@ namespace CentraLog.Tests.Integration
                         d => d.ServiceType == typeof(DbContextOptions<ApplicationDbContext>));
                     if (descriptor != null) services.Remove(descriptor);
 
-                    // Re-register using the exact same Pomelo engine, but targeting the isolated local sandbox catalog
+                    // Re-register using the exact same Pomelo engine, targeting the isolated local sandbox catalog
                     services.AddDbContext<ApplicationDbContext>(options =>
                     {
                         options.UseMySql(TestConnectionString, new MySqlServerVersion(new Version(8, 0, 30)));
@@ -75,7 +74,6 @@ namespace CentraLog.Tests.Integration
 
         private async Task SeedIsolatedDatabaseAsync(ApplicationDbContext context)
         {
-            // Forces clean table recreation directly inside XAMPP database before runtime runs
             await context.Database.EnsureDeletedAsync();
             await context.Database.EnsureCreatedAsync();
 
@@ -149,6 +147,83 @@ namespace CentraLog.Tests.Integration
             var response = await client.PostAsJsonAsync("/api/v1/assets/bulk-transfer", transferDto);
 
             Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task UpdateProperty_And_ToggleStickerQueue_ExecutesSuccessfully()
+        {
+            using var scope = _factory.Services.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            await SeedIsolatedDatabaseAsync(context);
+
+            var client = CreateAuthenticatedClient(UserRole.InventoryStaff);
+
+            var updateDto = new UpdatePropertyCommandDto
+            {
+                Name = "KIWI 15.6 Digital Display",
+                PropertyNumber = "SPHV-2026-02-0042",
+                SerialNumber = "KW16TSDTD2026124-80008",
+                AccountCategory = "ICT Equipment",
+                CategoryTag = "Workstations",
+                ProcurementCost = 34999.00m,
+                AcquisitionDate = DateTime.UtcNow,
+                Description = "Tabletop digital display system unit."
+            };
+
+            // 1. Test Property Metadata Update
+            var updateResponse = await client.PutAsJsonAsync("/api/v1/assets/1", updateDto);
+            Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
+
+            // 2. Test Sticker Print Queue Toggle
+            var queueResponse = await client.PostAsync("/api/v1/assets/1/sticker-queue", null);
+            Assert.Equal(HttpStatusCode.OK, queueResponse.StatusCode);
+        }
+
+        // --- NEW PHASE 2 TEST CASES ---
+
+        [Fact]
+        public async Task UpdateCustodianAssignment_AsAuthorizedStaff_ExecutesSuccessfully()
+        {
+            using var scope = _factory.Services.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            await SeedIsolatedDatabaseAsync(context);
+
+            var client = CreateAuthenticatedClient(UserRole.InventoryStaff);
+
+            var custodianDto = new UpdateCustodianCommandDto
+            {
+                NewCustodianId = 2,
+                NewRoomId = 202
+            };
+
+            var response = await client.PatchAsJsonAsync("/api/v1/assets/1/custodian", custodianDto);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task VerifyInventory_AsAuthorizedStaff_RecordsAuditEntrySuccessfully()
+        {
+            using var scope = _factory.Services.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            await SeedIsolatedDatabaseAsync(context);
+
+            var client = CreateAuthenticatedClient(UserRole.InventoryStaff);
+
+            var response = await client.PostAsync("/api/v1/assets/1/verify-inventory", null);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task VerifyInventory_AsAccountant_ReturnsForbidden()
+        {
+            using var scope = _factory.Services.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            await SeedIsolatedDatabaseAsync(context);
+
+            var client = CreateAuthenticatedClient(UserRole.Accountant);
+
+            var response = await client.PostAsync("/api/v1/assets/1/verify-inventory", null);
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         }
     }
 }
