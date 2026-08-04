@@ -1,13 +1,18 @@
-﻿using CentraLog.Core.Domain.Enums;
+﻿// CentraLog.Tests/Integration/AssetControllerTests.cs
+
+using CentraLog.Core.Domain.Entities;
+using CentraLog.Core.Domain.Enums;
 using CentraLog.Core.DTOs;
 using CentraLog.Infrastructure.Data;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Tokens;
 using System;
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -15,7 +20,6 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
-using Microsoft.IdentityModel.Tokens;
 using Xunit;
 
 namespace CentraLog.Tests.Integration
@@ -25,7 +29,6 @@ namespace CentraLog.Tests.Integration
         private readonly WebApplicationFactory<Program> _factory;
         private const string TestSigningKey = "CentraLogSuperSecretCryptographicSecureSigningKey2026SecurityTokenFramework!";
 
-        // Mappings to a dedicated local XAMPP sandbox test catalog to prevent data corruption on active files
         private const string TestConnectionString = "Server=localhost;Port=3306;Database=db58833_test;Uid=root;Pwd=;";
 
         public AssetControllerTests(WebApplicationFactory<Program> factory)
@@ -38,7 +41,6 @@ namespace CentraLog.Tests.Integration
                         d => d.ServiceType == typeof(DbContextOptions<ApplicationDbContext>));
                     if (descriptor != null) services.Remove(descriptor);
 
-                    // Re-register using the exact same Pomelo engine, targeting the isolated local sandbox catalog
                     services.AddDbContext<ApplicationDbContext>(options =>
                     {
                         options.UseMySql(TestConnectionString, new MySqlServerVersion(new Version(8, 0, 30)));
@@ -76,8 +78,6 @@ namespace CentraLog.Tests.Integration
         {
             await context.Database.EnsureDeletedAsync();
             await context.Database.EnsureCreatedAsync();
-
-            var timestamp = DateTime.UtcNow;
 
             await context.Assets.AddRangeAsync(new List<CentraLog.Core.Domain.Entities.Asset>
             {
@@ -170,16 +170,12 @@ namespace CentraLog.Tests.Integration
                 Description = "Tabletop digital display system unit."
             };
 
-            // 1. Test Property Metadata Update
             var updateResponse = await client.PutAsJsonAsync("/api/v1/assets/1", updateDto);
             Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
 
-            // 2. Test Sticker Print Queue Toggle
             var queueResponse = await client.PostAsync("/api/v1/assets/1/sticker-queue", null);
             Assert.Equal(HttpStatusCode.OK, queueResponse.StatusCode);
         }
-
-        // --- NEW PHASE 2 TEST CASES ---
 
         [Fact]
         public async Task UpdateCustodianAssignment_AsAuthorizedStaff_ExecutesSuccessfully()
@@ -224,6 +220,71 @@ namespace CentraLog.Tests.Integration
 
             var response = await client.PostAsync("/api/v1/assets/1/verify-inventory", null);
             Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task UploadImage_ValidImageFile_ReturnsOkAndRelativeUrl()
+        {
+            var client = CreateAuthenticatedClient(UserRole.InventoryStaff);
+
+            using var content = new MultipartFormDataContent();
+            var byteContent = new ByteArrayContent(Encoding.UTF8.GetBytes("fake_image_bytes"));
+            byteContent.Headers.ContentType = MediaTypeHeaderValue.Parse("image/png");
+            content.Add(byteContent, "file", "test_hardware.png");
+
+            var response = await client.PostAsync("/api/v1/assets/upload-image", content);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            var jsonString = await response.Content.ReadAsStringAsync();
+            Assert.Contains("/uploads/", jsonString);
+        }
+
+        [Fact]
+        public async Task DisposeAsset_WhileInMaintenance_ReturnsUnprocessableEntity()
+        {
+            using var scope = _factory.Services.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+            // Seed asset 44 explicitly in maintenance
+            var maintenanceAsset = new Asset
+            {
+                Id = 44,
+                Name = "Test Router",
+                ProcurementCost = 1000m,
+                LifecycleState = LifecycleState.InMaintenance
+            };
+            await context.Assets.AddAsync(maintenanceAsset);
+            await context.SaveChangesAsync();
+
+            var client = CreateAuthenticatedClient(UserRole.Manager);
+            var disposeCommand = new DisposeAssetCommandDto
+            {
+                DisposalReason = "Obsolescence",
+                ScrapRecoveryValue = 100.00m
+            };
+
+            var response = await client.PostAsJsonAsync("/api/v1/assets/44/dispose", disposeCommand);
+
+            Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task DisposeAsset_UnderRetryingExecutionStrategy_ExecutesTransactionSuccessfully()
+        {
+            using var scope = _factory.Services.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            await SeedIsolatedDatabaseAsync(context);
+
+            var client = CreateAuthenticatedClient(UserRole.Manager, userId: 2);
+            var disposeCommand = new DisposeAssetCommandDto
+            {
+                DisposalReason = "Retrying strategy transactional compliance test.",
+                ScrapRecoveryValue = 3500.00m
+            };
+
+            var response = await client.PostAsJsonAsync("/api/v1/assets/2/dispose", disposeCommand);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         }
     }
 }

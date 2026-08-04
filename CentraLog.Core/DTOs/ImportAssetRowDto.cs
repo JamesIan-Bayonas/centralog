@@ -9,5 +9,6 @@ namespace CentraLog.Core.DTOs
         public decimal ProcurementCost { get; set; }
         public int RoomId { get; set; }
         public int CustodianId { get; set; }
+        public string? ImageUrl { get; set; }
     }
 }

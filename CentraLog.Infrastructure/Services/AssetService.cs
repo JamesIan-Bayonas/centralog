@@ -149,47 +149,61 @@ namespace CentraLog.Infrastructure.Services
             }
         }
 
+        // CentraLog.Infrastructure/Services/AssetService.cs
+
         public async Task<bool> DisposeAssetAsync(int assetId, DisposeAssetCommandDto dto, int adminUserId, CancellationToken cancellationToken = default)
         {
-            using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
-            try
+            var strategy = _context.Database.CreateExecutionStrategy();
+
+            return await strategy.ExecuteAsync(async () =>
             {
-                var asset = await _context.Assets.FirstOrDefaultAsync(a => a.Id == assetId, cancellationToken);
-                if (asset == null) throw new KeyNotFoundException($"Asset {assetId} does not exist.");
-                if (asset.LifecycleState == LifecycleState.Disposed)
+                using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+                try
                 {
-                    throw new InvalidOperationException("Asset has already been decommissioned.");
+                    var asset = await _context.Assets.FirstOrDefaultAsync(a => a.Id == assetId, cancellationToken);
+                    if (asset == null) throw new KeyNotFoundException($"Asset #{assetId} does not exist in relational records.");
+
+                    // Guard 1: Block double-disposal on retired assets
+                    if (asset.LifecycleState == LifecycleState.Disposed)
+                    {
+                        throw new InvalidOperationException($"Decommission Rejected: Asset #{assetId} has already been retired/disposed.");
+                    }
+
+                    // Guard 2: Block disposal on assets locked inside active maintenance workflows
+                    if (asset.LifecycleState == LifecycleState.InMaintenance)
+                    {
+                        throw new InvalidOperationException($"Decommission Rejected: Asset #{assetId} is currently locked in an active repair loop. Resolve maintenance prior to retirement.");
+                    }
+
+                    var timestamp = DateTime.UtcNow;
+
+                    asset.LifecycleState = LifecycleState.Disposed;
+                    asset.SalvageValue = dto.ScrapRecoveryValue;
+                    asset.UpdatedAt = timestamp;
+
+                    var auditLog = new AuditLog
+                    {
+                        AssetId = asset.Id,
+                        OldRoomId = asset.RoomId,
+                        NewRoomId = asset.RoomId,
+                        OldCustodianId = asset.CustodianId,
+                        NewCustodianId = asset.CustodianId,
+                        ModifiedByUserId = adminUserId,
+                        Timestamp = timestamp
+                    };
+
+                    await _context.AuditLogs.AddAsync(auditLog, cancellationToken);
+                    await _context.SaveChangesAsync(cancellationToken);
+                    await transaction.CommitAsync(cancellationToken);
+                    return true;
                 }
-
-                var timestamp = DateTime.UtcNow;
-
-                asset.LifecycleState = LifecycleState.Disposed;
-                asset.SalvageValue = dto.ScrapRecoveryValue;
-                asset.UpdatedAt = timestamp;
-
-                var auditLog = new AuditLog
+                catch (Exception)
                 {
-                    AssetId = asset.Id,
-                    OldRoomId = asset.RoomId,
-                    NewRoomId = asset.RoomId,
-                    OldCustodianId = asset.CustodianId,
-                    NewCustodianId = asset.CustodianId,
-                    ModifiedByUserId = adminUserId,
-                    Timestamp = timestamp
-                };
-
-                await _context.AuditLogs.AddAsync(auditLog, cancellationToken);
-                await _context.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-                return true;
-            }
-            catch (Exception)
-            {
-                await transaction.RollbackAsync(cancellationToken);
-                throw;
-            }
+                    await transaction.RollbackAsync(cancellationToken);
+                    throw;
+                }
+            });
         }
-
         public async Task<Asset> GetAssetByIdAsync(int id, CancellationToken cancellationToken = default)
         {
             var asset = await _context.Assets.FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
@@ -211,26 +225,6 @@ namespace CentraLog.Infrastructure.Services
                                    .ToListAsync(cancellationToken);
 
             return new PagedResult<Asset>(items, totalCount, filter.PageNumber, filter.PageSize);
-        }
-
-        public async Task<int> ImportAssetBatchAsync(IEnumerable<ImportAssetRowDto> items, CancellationToken cancellationToken = default)
-        {
-            var timestamp = DateTime.UtcNow;
-            var assetsToInsert = items.Select(row => new Asset
-            {
-                Name = row.Name,
-                CategoryTag = row.CategoryTag,
-                ProcurementCost = row.ProcurementCost,
-                RoomId = row.RoomId,
-                CustodianId = row.CustodianId,
-                LifecycleState = LifecycleState.Procured,
-                CreatedAt = timestamp,
-                UpdatedAt = timestamp
-            }).ToList();
-
-            await _context.Assets.AddRangeAsync(assetsToInsert, cancellationToken);
-            await _context.SaveChangesAsync(cancellationToken);
-            return assetsToInsert.Count;
         }
 
         public async Task<AssetHistoryDto> GetAssetHistoryAsync(int assetId, CancellationToken cancellationToken = default)
@@ -523,6 +517,26 @@ namespace CentraLog.Infrastructure.Services
                 await transaction.RollbackAsync(cancellationToken);
                 throw;
             }
+        }
+        public async Task<int> ImportAssetBatchAsync(IEnumerable<ImportAssetRowDto> items, CancellationToken cancellationToken = default)
+        {
+            var timestamp = DateTime.UtcNow;
+            var assetsToInsert = items.Select(row => new Asset
+            {
+                Name = row.Name,
+                CategoryTag = row.CategoryTag,
+                ProcurementCost = row.ProcurementCost,
+                RoomId = row.RoomId,
+                CustodianId = row.CustodianId,
+                ImageUrl = row.ImageUrl,
+                LifecycleState = LifecycleState.Procured,
+                CreatedAt = timestamp,
+                UpdatedAt = timestamp
+            }).ToList();
+
+            await _context.Assets.AddRangeAsync(assetsToInsert, cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+            return assetsToInsert.Count;
         }
     }
 }
