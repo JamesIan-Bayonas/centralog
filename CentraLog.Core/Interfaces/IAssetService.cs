@@ -26,5 +26,7 @@ namespace CentraLog.Core.Interfaces
         Task<bool> ToggleStickerQueueAsync(int assetId, CancellationToken cancellationToken = default);
         Task<List<Asset>> GetStickerQueueAsync(CancellationToken cancellationToken = default);
         Task<bool> VerifyInventoryAsync(int assetId, int adminUserId, CancellationToken cancellationToken = default);
+        // Append this method contract to IAssetService:
+        Task<bool> ActivateAssetAsync(int assetId, int adminUserId, CancellationToken cancellationToken = default);
     }
 }

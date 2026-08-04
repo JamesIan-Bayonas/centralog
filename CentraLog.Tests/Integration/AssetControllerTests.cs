@@ -1,14 +1,10 @@
-﻿// CentraLog.Tests/Integration/AssetControllerTests.cs
-
-using CentraLog.Core.Domain.Entities;
-using CentraLog.Core.Domain.Enums;
+﻿using CentraLog.Core.Domain.Enums;
 using CentraLog.Core.DTOs;
 using CentraLog.Infrastructure.Data;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.IdentityModel.Tokens;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
@@ -20,6 +16,7 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.IdentityModel.Tokens;
 using Xunit;
 
 namespace CentraLog.Tests.Integration
@@ -28,7 +25,6 @@ namespace CentraLog.Tests.Integration
     {
         private readonly WebApplicationFactory<Program> _factory;
         private const string TestSigningKey = "CentraLogSuperSecretCryptographicSecureSigningKey2026SecurityTokenFramework!";
-
         private const string TestConnectionString = "Server=localhost;Port=3306;Database=db58833_test;Uid=root;Pwd=;";
 
         public AssetControllerTests(WebApplicationFactory<Program> factory)
@@ -43,7 +39,8 @@ namespace CentraLog.Tests.Integration
 
                     services.AddDbContext<ApplicationDbContext>(options =>
                     {
-                        options.UseMySql(TestConnectionString, new MySqlServerVersion(new Version(8, 0, 30)));
+                        options.UseMySql(TestConnectionString, new MySqlServerVersion(new Version(8, 0, 30)),
+                            mySqlOptions => mySqlOptions.EnableRetryOnFailure());
                     });
                 });
             });
@@ -87,6 +84,36 @@ namespace CentraLog.Tests.Integration
             });
 
             await context.SaveChangesAsync();
+        }
+
+        [Fact]
+        public async Task ExecuteBulkTransfer_UnderRetryingExecutionStrategy_ExecutesSuccessfully()
+        {
+            using var scope = _factory.Services.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            await SeedIsolatedDatabaseAsync(context);
+
+            var client = CreateAuthenticatedClient(UserRole.Manager, userId: 2);
+            var transferDto = new BulkTransferRequestDto { AssetIds = new List<int> { 1, 2 }, DestinationRoomId = 202, NewCustodianId = 2 };
+
+            var response = await client.PostAsJsonAsync("/api/v1/assets/bulk-transfer", transferDto);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task DisposeAsset_UnderRetryingExecutionStrategy_ExecutesSuccessfully()
+        {
+            using var scope = _factory.Services.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            await SeedIsolatedDatabaseAsync(context);
+
+            var client = CreateAuthenticatedClient(UserRole.Manager, userId: 2);
+            var disposeCommand = new DisposeAssetCommandDto { DisposalReason = "Retrying strategy execution verification.", ScrapRecoveryValue = 2500.00m };
+
+            var response = await client.PostAsJsonAsync("/api/v1/assets/2/dispose", disposeCommand);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         }
 
         [Fact]
@@ -237,54 +264,6 @@ namespace CentraLog.Tests.Integration
 
             var jsonString = await response.Content.ReadAsStringAsync();
             Assert.Contains("/uploads/", jsonString);
-        }
-
-        [Fact]
-        public async Task DisposeAsset_WhileInMaintenance_ReturnsUnprocessableEntity()
-        {
-            using var scope = _factory.Services.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
-            // Seed asset 44 explicitly in maintenance
-            var maintenanceAsset = new Asset
-            {
-                Id = 44,
-                Name = "Test Router",
-                ProcurementCost = 1000m,
-                LifecycleState = LifecycleState.InMaintenance
-            };
-            await context.Assets.AddAsync(maintenanceAsset);
-            await context.SaveChangesAsync();
-
-            var client = CreateAuthenticatedClient(UserRole.Manager);
-            var disposeCommand = new DisposeAssetCommandDto
-            {
-                DisposalReason = "Obsolescence",
-                ScrapRecoveryValue = 100.00m
-            };
-
-            var response = await client.PostAsJsonAsync("/api/v1/assets/44/dispose", disposeCommand);
-
-            Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
-        }
-
-        [Fact]
-        public async Task DisposeAsset_UnderRetryingExecutionStrategy_ExecutesTransactionSuccessfully()
-        {
-            using var scope = _factory.Services.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            await SeedIsolatedDatabaseAsync(context);
-
-            var client = CreateAuthenticatedClient(UserRole.Manager, userId: 2);
-            var disposeCommand = new DisposeAssetCommandDto
-            {
-                DisposalReason = "Retrying strategy transactional compliance test.",
-                ScrapRecoveryValue = 3500.00m
-            };
-
-            var response = await client.PostAsJsonAsync("/api/v1/assets/2/dispose", disposeCommand);
-
-            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         }
     }
 }

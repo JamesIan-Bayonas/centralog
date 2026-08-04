@@ -62,99 +62,104 @@ namespace CentraLog.Infrastructure.Services
 
         public async Task<bool> ExecuteBulkTransferAsync(BulkTransferRequestDto dto, int adminUserId, CancellationToken cancellationToken = default)
         {
-            using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
-            try
+            var strategy = _context.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
             {
-                var timestamp = DateTime.UtcNow;
-
-                foreach (var assetId in dto.AssetIds)
+                using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+                try
                 {
-                    var asset = await _context.Assets.FirstOrDefaultAsync(a => a.Id == assetId, cancellationToken);
-                    if (asset == null) throw new KeyNotFoundException($"Transfer rejected: Asset {assetId} missing.");
-                    if (asset.LifecycleState == LifecycleState.Disposed || asset.LifecycleState == LifecycleState.InMaintenance)
+                    var timestamp = DateTime.UtcNow;
+
+                    foreach (var assetId in dto.AssetIds)
                     {
-                        await transaction.RollbackAsync(cancellationToken);
-                        throw new InvalidOperationException($"Transfer rejected: Asset {asset.Id} is un-relocatable.");
+                        var asset = await _context.Assets.FirstOrDefaultAsync(a => a.Id == assetId, cancellationToken);
+                        if (asset == null) throw new KeyNotFoundException($"Transfer rejected: Asset {assetId} missing.");
+                        if (asset.LifecycleState == LifecycleState.Disposed || asset.LifecycleState == LifecycleState.InMaintenance)
+                        {
+                            await transaction.RollbackAsync(cancellationToken);
+                            throw new InvalidOperationException($"Transfer rejected: Asset {asset.Id} is un-relocatable.");
+                        }
+
+                        var auditLog = new AuditLog
+                        {
+                            AssetId = asset.Id,
+                            OldRoomId = asset.RoomId,
+                            NewRoomId = dto.DestinationRoomId,
+                            OldCustodianId = asset.CustodianId,
+                            NewCustodianId = dto.NewCustodianId,
+                            ModifiedByUserId = adminUserId,
+                            Timestamp = timestamp
+                        };
+
+                        asset.RoomId = dto.DestinationRoomId;
+                        asset.CustodianId = dto.NewCustodianId;
+                        asset.UpdatedAt = timestamp;
+
+                        await _context.AuditLogs.AddAsync(auditLog, cancellationToken);
                     }
 
-                    var auditLog = new AuditLog
-                    {
-                        AssetId = asset.Id,
-                        OldRoomId = asset.RoomId,
-                        NewRoomId = dto.DestinationRoomId,
-                        OldCustodianId = asset.CustodianId,
-                        NewCustodianId = dto.NewCustodianId,
-                        ModifiedByUserId = adminUserId,
-                        Timestamp = timestamp
-                    };
-
-                    asset.RoomId = dto.DestinationRoomId;
-                    asset.CustodianId = dto.NewCustodianId;
-                    asset.UpdatedAt = timestamp;
-
-                    await _context.AuditLogs.AddAsync(auditLog, cancellationToken);
+                    await _context.SaveChangesAsync(cancellationToken);
+                    await transaction.CommitAsync(cancellationToken);
+                    return true;
                 }
-
-                await _context.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-                return true;
-            }
-            catch (DbUpdateException)
-            {
-                await transaction.RollbackAsync(cancellationToken);
-                throw new TimeoutException("Database deadlock encountered.");
-            }
-            catch (Exception)
-            {
-                await transaction.RollbackAsync(cancellationToken);
-                throw;
-            }
+                catch (DbUpdateException)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    throw new TimeoutException("Database deadlock encountered.");
+                }
+                catch (Exception)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    throw;
+                }
+            });
         }
 
         public async Task<bool> InitiateMaintenanceAsync(int assetId, InitiateMaintenanceCommandDto dto, int adminUserId, CancellationToken cancellationToken = default)
         {
-            using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
-            try
+            var strategy = _context.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
             {
-                var asset = await _context.Assets.FirstOrDefaultAsync(a => a.Id == assetId, cancellationToken);
-                if (asset == null) throw new KeyNotFoundException($"Asset {assetId} missing.");
-                if (asset.LifecycleState == LifecycleState.InMaintenance || asset.LifecycleState == LifecycleState.Disposed)
+                using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+                try
                 {
-                    throw new InvalidOperationException("Asset cannot enter repairs.");
+                    var asset = await _context.Assets.FirstOrDefaultAsync(a => a.Id == assetId, cancellationToken);
+                    if (asset == null) throw new KeyNotFoundException($"Asset {assetId} missing.");
+                    if (asset.LifecycleState == LifecycleState.InMaintenance || asset.LifecycleState == LifecycleState.Disposed)
+                    {
+                        throw new InvalidOperationException("Asset cannot enter repairs.");
+                    }
+
+                    var timestamp = DateTime.UtcNow;
+                    var maintenanceLog = new MaintenanceLog
+                    {
+                        AssetId = asset.Id,
+                        StartTime = timestamp,
+                        PerformedByUserId = adminUserId,
+                        ResolutionNotes = dto.IssueDescription,
+                        RepairCost = 0.00m
+                    };
+
+                    asset.LifecycleState = LifecycleState.InMaintenance;
+                    asset.IsMaintenanceFlagged = false;
+                    asset.UpdatedAt = timestamp;
+
+                    await _context.MaintenanceLogs.AddAsync(maintenanceLog, cancellationToken);
+                    await _context.SaveChangesAsync(cancellationToken);
+                    await transaction.CommitAsync(cancellationToken);
+                    return true;
                 }
-
-                var timestamp = DateTime.UtcNow;
-                var maintenanceLog = new MaintenanceLog
+                catch (Exception)
                 {
-                    AssetId = asset.Id,
-                    StartTime = timestamp,
-                    PerformedByUserId = adminUserId,
-                    ResolutionNotes = dto.IssueDescription,
-                    RepairCost = 0.00m
-                };
-
-                asset.LifecycleState = LifecycleState.InMaintenance;
-                asset.IsMaintenanceFlagged = false;
-                asset.UpdatedAt = timestamp;
-
-                await _context.MaintenanceLogs.AddAsync(maintenanceLog, cancellationToken);
-                await _context.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-                return true;
-            }
-            catch (Exception)
-            {
-                await transaction.RollbackAsync(cancellationToken);
-                throw;
-            }
+                    await transaction.RollbackAsync(cancellationToken);
+                    throw;
+                }
+            });
         }
-
-        // CentraLog.Infrastructure/Services/AssetService.cs
 
         public async Task<bool> DisposeAssetAsync(int assetId, DisposeAssetCommandDto dto, int adminUserId, CancellationToken cancellationToken = default)
         {
             var strategy = _context.Database.CreateExecutionStrategy();
-
             return await strategy.ExecuteAsync(async () =>
             {
                 using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
@@ -163,13 +168,11 @@ namespace CentraLog.Infrastructure.Services
                     var asset = await _context.Assets.FirstOrDefaultAsync(a => a.Id == assetId, cancellationToken);
                     if (asset == null) throw new KeyNotFoundException($"Asset #{assetId} does not exist in relational records.");
 
-                    // Guard 1: Block double-disposal on retired assets
                     if (asset.LifecycleState == LifecycleState.Disposed)
                     {
                         throw new InvalidOperationException($"Decommission Rejected: Asset #{assetId} has already been retired/disposed.");
                     }
 
-                    // Guard 2: Block disposal on assets locked inside active maintenance workflows
                     if (asset.LifecycleState == LifecycleState.InMaintenance)
                     {
                         throw new InvalidOperationException($"Decommission Rejected: Asset #{assetId} is currently locked in an active repair loop. Resolve maintenance prior to retirement.");
@@ -204,6 +207,7 @@ namespace CentraLog.Infrastructure.Services
                 }
             });
         }
+
         public async Task<Asset> GetAssetByIdAsync(int id, CancellationToken cancellationToken = default)
         {
             var asset = await _context.Assets.FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
@@ -327,71 +331,73 @@ namespace CentraLog.Infrastructure.Services
 
         public async Task<bool> ResolveMaintenanceActionAsync(int assetId, MaintenanceActionRequestDto dto, int adminUserId, CancellationToken cancellationToken = default)
         {
-            using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
-            try
+            var strategy = _context.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
             {
-                var asset = await _context.Assets.FirstOrDefaultAsync(a => a.Id == assetId, cancellationToken);
-                if (asset == null)
+                using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+                try
                 {
-                    throw new KeyNotFoundException($"Resolution rejected: Asset ID {assetId} does not exist in relational nodes.");
+                    var asset = await _context.Assets.FirstOrDefaultAsync(a => a.Id == assetId, cancellationToken);
+                    if (asset == null)
+                    {
+                        throw new KeyNotFoundException($"Resolution rejected: Asset ID {assetId} does not exist in relational nodes.");
+                    }
+
+                    if (asset.LifecycleState != LifecycleState.InMaintenance)
+                    {
+                        throw new InvalidOperationException($"Resolution rejected: Asset ID {assetId} is currently in an active state of '{asset.LifecycleState}' and cannot be extracted from a non-existent repair loop.");
+                    }
+
+                    var timestamp = DateTime.UtcNow;
+
+                    var activeLog = await _context.MaintenanceLogs
+                        .Where(m => m.AssetId == assetId && m.EndTime == null)
+                        .OrderByDescending(m => m.StartTime)
+                        .FirstOrDefaultAsync(cancellationToken);
+
+                    if (activeLog == null)
+                    {
+                        throw new InvalidOperationException($"Relational database mismatch: Asset ID {assetId} is flagged InMaintenance, but no open log profile exists.");
+                    }
+
+                    activeLog.EndTime = timestamp;
+                    activeLog.ResolutionNotes = dto.ResolutionNotes.Trim();
+                    activeLog.RepairCost = dto.RepairCost;
+                    activeLog.PerformedByUserId = adminUserId;
+
+                    asset.LifecycleState = dto.TargetState;
+                    asset.IsMaintenanceFlagged = false;
+                    asset.UpdatedAt = timestamp;
+
+                    var auditLog = new AuditLog
+                    {
+                        AssetId = asset.Id,
+                        OldRoomId = asset.RoomId,
+                        NewRoomId = asset.RoomId,
+                        OldCustodianId = asset.CustodianId,
+                        NewCustodianId = asset.CustodianId,
+                        ModifiedByUserId = adminUserId,
+                        Timestamp = timestamp
+                    };
+
+                    await _context.AuditLogs.AddAsync(auditLog, cancellationToken);
+                    await _context.SaveChangesAsync(cancellationToken);
+                    await transaction.CommitAsync(cancellationToken);
+
+                    return true;
                 }
-
-                if (asset.LifecycleState != LifecycleState.InMaintenance)
+                catch (DbUpdateException)
                 {
-                    throw new InvalidOperationException($"Resolution rejected: Asset ID {assetId} is currently in an active state of '{asset.LifecycleState}' and cannot be extracted from a non-existent repair loop.");
+                    await transaction.RollbackAsync(cancellationToken);
+                    throw new TimeoutException("Database connection timeout or concurrency deadlock encountered. Transaction aborted.");
                 }
-
-                var timestamp = DateTime.UtcNow;
-
-                var activeLog = await _context.MaintenanceLogs
-                    .Where(m => m.AssetId == assetId && m.EndTime == null)
-                    .OrderByDescending(m => m.StartTime)
-                    .FirstOrDefaultAsync(cancellationToken);
-
-                if (activeLog == null)
+                catch (Exception)
                 {
-                    throw new InvalidOperationException($"Relational database mismatch: Asset ID {assetId} is flagged InMaintenance, but no open log profile exists.");
+                    await transaction.RollbackAsync(cancellationToken);
+                    throw;
                 }
-
-                activeLog.EndTime = timestamp;
-                activeLog.ResolutionNotes = dto.ResolutionNotes.Trim();
-                activeLog.RepairCost = dto.RepairCost;
-                activeLog.PerformedByUserId = adminUserId;
-
-                asset.LifecycleState = dto.TargetState;
-                asset.IsMaintenanceFlagged = false;
-                asset.UpdatedAt = timestamp;
-
-                var auditLog = new AuditLog
-                {
-                    AssetId = asset.Id,
-                    OldRoomId = asset.RoomId,
-                    NewRoomId = asset.RoomId,
-                    OldCustodianId = asset.CustodianId,
-                    NewCustodianId = asset.CustodianId,
-                    ModifiedByUserId = adminUserId,
-                    Timestamp = timestamp
-                };
-
-                await _context.AuditLogs.AddAsync(auditLog, cancellationToken);
-                await _context.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-
-                return true;
-            }
-            catch (DbUpdateException)
-            {
-                await transaction.RollbackAsync(cancellationToken);
-                throw new TimeoutException("Database connection timeout or concurrency deadlock encountered. Transaction aborted.");
-            }
-            catch (Exception)
-            {
-                await transaction.RollbackAsync(cancellationToken);
-                throw;
-            }
+            });
         }
-
-        // --- INSTITUTIONAL PROPERTY EXTENSION IMPLEMENTATIONS ---
 
         public async Task<bool> UpdatePropertyAsync(int assetId, UpdatePropertyCommandDto dto, int adminUserId, CancellationToken cancellationToken = default)
         {
@@ -420,43 +426,47 @@ namespace CentraLog.Infrastructure.Services
 
         public async Task<bool> UpdateCustodianAssignmentAsync(int assetId, UpdateCustodianCommandDto dto, int adminUserId, CancellationToken cancellationToken = default)
         {
-            using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
-            try
+            var strategy = _context.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
             {
-                var asset = await _context.Assets.FirstOrDefaultAsync(a => a.Id == assetId, cancellationToken);
-                if (asset == null) throw new KeyNotFoundException($"Property ID #{assetId} missing.");
-                if (asset.LifecycleState == LifecycleState.Disposed || asset.LifecycleState == LifecycleState.InMaintenance)
+                using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+                try
                 {
-                    throw new InvalidOperationException($"Property ID #{assetId} cannot be reassigned while in maintenance or disposed states.");
+                    var asset = await _context.Assets.FirstOrDefaultAsync(a => a.Id == assetId, cancellationToken);
+                    if (asset == null) throw new KeyNotFoundException($"Property ID #{assetId} missing.");
+                    if (asset.LifecycleState == LifecycleState.Disposed || asset.LifecycleState == LifecycleState.InMaintenance)
+                    {
+                        throw new InvalidOperationException($"Property ID #{assetId} cannot be reassigned while in maintenance or disposed states.");
+                    }
+
+                    var timestamp = DateTime.UtcNow;
+
+                    var auditLog = new AuditLog
+                    {
+                        AssetId = asset.Id,
+                        OldRoomId = asset.RoomId,
+                        NewRoomId = dto.NewRoomId,
+                        OldCustodianId = asset.CustodianId,
+                        NewCustodianId = dto.NewCustodianId,
+                        ModifiedByUserId = adminUserId,
+                        Timestamp = timestamp
+                    };
+
+                    asset.CustodianId = dto.NewCustodianId;
+                    asset.RoomId = dto.NewRoomId;
+                    asset.UpdatedAt = timestamp;
+
+                    await _context.AuditLogs.AddAsync(auditLog, cancellationToken);
+                    await _context.SaveChangesAsync(cancellationToken);
+                    await transaction.CommitAsync(cancellationToken);
+                    return true;
                 }
-
-                var timestamp = DateTime.UtcNow;
-
-                var auditLog = new AuditLog
+                catch (Exception)
                 {
-                    AssetId = asset.Id,
-                    OldRoomId = asset.RoomId,
-                    NewRoomId = dto.NewRoomId,
-                    OldCustodianId = asset.CustodianId,
-                    NewCustodianId = dto.NewCustodianId,
-                    ModifiedByUserId = adminUserId,
-                    Timestamp = timestamp
-                };
-
-                asset.CustodianId = dto.NewCustodianId;
-                asset.RoomId = dto.NewRoomId;
-                asset.UpdatedAt = timestamp;
-
-                await _context.AuditLogs.AddAsync(auditLog, cancellationToken);
-                await _context.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-                return true;
-            }
-            catch (Exception)
-            {
-                await transaction.RollbackAsync(cancellationToken);
-                throw;
-            }
+                    await transaction.RollbackAsync(cancellationToken);
+                    throw;
+                }
+            });
         }
 
         public async Task<bool> ToggleStickerQueueAsync(int assetId, CancellationToken cancellationToken = default)
@@ -478,46 +488,49 @@ namespace CentraLog.Infrastructure.Services
                 .ToListAsync(cancellationToken);
         }
 
-        // Append this method inside CentraLog.Infrastructure.Services.AssetService class:
-
         public async Task<bool> VerifyInventoryAsync(int assetId, int adminUserId, CancellationToken cancellationToken = default)
         {
-            using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
-            try
+            var strategy = _context.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
             {
-                var asset = await _context.Assets.FirstOrDefaultAsync(a => a.Id == assetId, cancellationToken);
-                if (asset == null) throw new KeyNotFoundException($"Property ID #{assetId} missing from database context.");
-                if (asset.LifecycleState == LifecycleState.Disposed)
+                using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+                try
                 {
-                    throw new InvalidOperationException("Cannot record physical inventory for decommissioned property entries.");
+                    var asset = await _context.Assets.FirstOrDefaultAsync(a => a.Id == assetId, cancellationToken);
+                    if (asset == null) throw new KeyNotFoundException($"Property ID #{assetId} missing from database context.");
+                    if (asset.LifecycleState == LifecycleState.Disposed)
+                    {
+                        throw new InvalidOperationException("Cannot record physical inventory for decommissioned property entries.");
+                    }
+
+                    var timestamp = DateTime.UtcNow;
+
+                    var auditLog = new AuditLog
+                    {
+                        AssetId = asset.Id,
+                        OldRoomId = asset.RoomId,
+                        NewRoomId = asset.RoomId,
+                        OldCustodianId = asset.CustodianId,
+                        NewCustodianId = asset.CustodianId,
+                        ModifiedByUserId = adminUserId,
+                        Timestamp = timestamp
+                    };
+
+                    asset.UpdatedAt = timestamp;
+
+                    await _context.AuditLogs.AddAsync(auditLog, cancellationToken);
+                    await _context.SaveChangesAsync(cancellationToken);
+                    await transaction.CommitAsync(cancellationToken);
+                    return true;
                 }
-
-                var timestamp = DateTime.UtcNow;
-
-                var auditLog = new AuditLog
+                catch (Exception)
                 {
-                    AssetId = asset.Id,
-                    OldRoomId = asset.RoomId,
-                    NewRoomId = asset.RoomId,
-                    OldCustodianId = asset.CustodianId,
-                    NewCustodianId = asset.CustodianId,
-                    ModifiedByUserId = adminUserId,
-                    Timestamp = timestamp
-                };
-
-                asset.UpdatedAt = timestamp;
-
-                await _context.AuditLogs.AddAsync(auditLog, cancellationToken);
-                await _context.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-                return true;
-            }
-            catch (Exception)
-            {
-                await transaction.RollbackAsync(cancellationToken);
-                throw;
-            }
+                    await transaction.RollbackAsync(cancellationToken);
+                    throw;
+                }
+            });
         }
+
         public async Task<int> ImportAssetBatchAsync(IEnumerable<ImportAssetRowDto> items, CancellationToken cancellationToken = default)
         {
             var timestamp = DateTime.UtcNow;
@@ -537,6 +550,50 @@ namespace CentraLog.Infrastructure.Services
             await _context.Assets.AddRangeAsync(assetsToInsert, cancellationToken);
             await _context.SaveChangesAsync(cancellationToken);
             return assetsToInsert.Count;
+        }
+
+        // Append this implementation method inside AssetService.cs:
+        public async Task<bool> ActivateAssetAsync(int assetId, int adminUserId, CancellationToken cancellationToken = default)
+        {
+            var strategy = _context.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+                try
+                {
+                    var asset = await _context.Assets.FirstOrDefaultAsync(a => a.Id == assetId, cancellationToken);
+                    if (asset == null) throw new KeyNotFoundException($"Asset #{assetId} missing from database context.");
+                    if (asset.LifecycleState != LifecycleState.Procured)
+                    {
+                        throw new InvalidOperationException($"Activation Rejected: Asset #{assetId} is in state '{asset.LifecycleState}' and cannot be promoted from Procured status.");
+                    }
+
+                    var timestamp = DateTime.UtcNow;
+                    asset.LifecycleState = LifecycleState.Active;
+                    asset.UpdatedAt = timestamp;
+
+                    var auditLog = new AuditLog
+                    {
+                        AssetId = asset.Id,
+                        OldRoomId = asset.RoomId,
+                        NewRoomId = asset.RoomId,
+                        OldCustodianId = asset.CustodianId,
+                        NewCustodianId = asset.CustodianId,
+                        ModifiedByUserId = adminUserId,
+                        Timestamp = timestamp
+                    };
+
+                    await _context.AuditLogs.AddAsync(auditLog, cancellationToken);
+                    await _context.SaveChangesAsync(cancellationToken);
+                    await transaction.CommitAsync(cancellationToken);
+                    return true;
+                }
+                catch (Exception)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    throw;
+                }
+            });
         }
     }
 }
