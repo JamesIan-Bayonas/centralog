@@ -1,13 +1,14 @@
 import axios from 'axios';
 
-// const API_BASE_URL = 'https://localhost:7196/api/v1'; //<-- this is the link for the local development environment
-
-/**
- * ARCHITECTURAL NETWORK BRIDGE CONFIGURATION
- * Vercel builds adaptively select the base production server URL,
- * while local runtimes fallback gracefully to your active Kestrel HTTP port profile.
- */
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5162/api/v1';
+
+export const SERVER_BASE_URL = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
+
+export const getMediaUrl = (path?: string): string => {
+  if (!path) return '';
+  if (path.startsWith('http://') || path.startsWith('https://')) return path;
+  return `${SERVER_BASE_URL}${path.startsWith('/') ? '' : '/'}${path}`;
+};
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -16,9 +17,15 @@ export const api = axios.create({
   },
 });
 
-// =========================================================================
-// SECURITY & DATA TRANSFER PROFILES
-// =========================================================================
+export interface NewAssetPayloadDto {
+  name: string;
+  categoryTag: string;
+  procurementCost: number;
+  roomId: number;
+  custodianId: number;
+  imageUrl?: string;
+}
+
 export interface AuthResponse {
   userId: number;
   username: string;
@@ -50,6 +57,14 @@ export interface Asset {
   expectedLifespanMonths: number;
   depreciationMethod: number;
   salvageValue: number;
+
+  propertyNumber?: string;
+  serialNumber?: string;
+  acquisitionDate?: string;
+  accountCategory?: string;
+  imageUrl?: string;
+  isStickerQueued?: boolean;
+  description?: string;
 }
 
 export interface DashboardSummary {
@@ -60,9 +75,6 @@ export interface DashboardSummary {
   disposedCount: number;
 }
 
-// =========================================================================
-// FEATURE 9: IMMUTABLE AUDIT TRAIL TIMELINE PROFILE DEFINITIONS
-// =========================================================================
 export interface AuditLogTimelineEntryDto {
   logId: number;
   oldRoomId: number;
@@ -84,8 +96,55 @@ export interface AssetHistoryDto {
   timelineEntries: AuditLogTimelineEntryDto[];
 }
 
+export interface LedgerAssetRowDto {
+  assetId: number;
+  assetName: string;
+  categoryTag: string;
+  depreciationMethod: string;
+  historicalCost: number;
+  accumulatedDepreciation: number;
+  currentBookValue: number;
+  salvageValue: number;
+  currentStatus: string;
+}
+
+export interface DepreciationLedgerReportDto {
+  generatedAt: string;
+  totalHistoricalCost: number;
+  totalCurrentBookValue: number;
+  rows: LedgerAssetRowDto[];
+}
+
+export interface MaintenanceResolutionPayload {
+  resolutionNotes: string;
+  repairCost: number;
+  targetState: number;
+}
+
+export interface InitiateMaintenancePayload {
+  issueDescription: string;
+  isUrgent: boolean;
+}
+
+export interface UpdatePropertyPayload {
+  name: string;
+  propertyNumber: string;
+  serialNumber: string;
+  accountCategory: string;
+  categoryTag: string;
+  procurementCost: number;
+  acquisitionDate: string;
+  description: string;
+  imageUrl?: string;
+}
+
+export interface UpdateCustodianPayload {
+  newCustodianId: number;
+  newRoomId: number;
+}
+
 // =========================================================================
-// INTERCEPTORS (REQUEST & RESPONSE ENFORCEMENT LABELS)
+// INTERCEPTORS
 // =========================================================================
 api.interceptors.request.use(
   (config) => {
@@ -140,6 +199,11 @@ export const assetApi = {
     return response.data;
   },
 
+  getAssetById: async (id: number): Promise<Asset> => {
+    const response = await api.get<Asset>(`/assets/${id}`);
+    return response.data;
+  },
+
   searchAssets: async (searchTerm: string, page: number, pageSize: number): Promise<PagedResult<Asset>> => {
     const response = await api.get<PagedResult<Asset>>('/assets/search', {
       params: { searchTerm, pageNumber: page, pageSize }
@@ -170,89 +234,84 @@ export const assetApi = {
   }
 };
 
-// =========================================================================
-// FEATURE 7: FINANCIAL LEDGER DTO PROFILES
-// =========================================================================
-export interface LedgerAssetRowDto {
-  assetId: number;
-  assetName: string;
-  categoryTag: string;
-  depreciationMethod: string;
-  historicalCost: number;
-  accumulatedDepreciation: number;
-  currentBookValue: number;
-  salvageValue: number;
-  currentStatus: string;
-}
-
-export interface DepreciationLedgerReportDto {
-  generatedAt: string;
-  totalHistoricalCost: number;
-  totalCurrentBookValue: number;
-  rows: LedgerAssetRowDto[];
-}
-
-// 1. ADDED: Payload contract interface matching C# API Controller expectation exactly
-export interface MaintenanceResolutionPayload {
-  resolutionNotes: string;
-  repairCost: number;
-  targetState: number;
-}
-
-export interface InitiateMaintenancePayload {
-  issueDescription: string;
-  isUrgent: boolean;
-}
-
-export interface MaintenanceResolutionPayload {
-  resolutionNotes: string;
-  repairCost: number;
-  targetState: number; // Maps to C# LifecycleState Enum (e.g., 2 = Active)
-}
-
-export interface NewAssetPayloadDto {
-  name: string;
-  categoryTag: string;
-  procurementCost: number;
-  roomId: number;
-  custodianId: number;
-}
-// 2. EXTENDED: Enriched endpoints tracking features natively
 export const assetApiEnriched = {
   ...assetApi,
 
-  /**
-   * Fetches the complete real-time enterprise depreciation asset ledger report.
-   * Guarded tightly by Accountant/SystemAdmin policies on both client and server layers.
-   */
+  getHardwareNameSuggestions: async (query?: string): Promise<string[]> => {
+    const response = await api.get<string[]>('/assets/suggestions/names', {
+      params: { query }
+    });
+    return response.data;
+  },
+
+  getCategoryTagSuggestions: async (): Promise<string[]> => {
+    const response = await api.get<string[]>('/assets/suggestions/categories');
+    return response.data;
+  },
+  
   getDepreciationLedgerReport: async (): Promise<DepreciationLedgerReportDto> => {
     const response = await api.get<DepreciationLedgerReportDto>('/assets/finance/ledger-report');
     return response.data;
   },
 
-  /**
-   * Transitions an asset out of active operations into an InMaintenance repair loop.
-   * Automatically halts mathematical depreciation updates in the backend financial layers.
-   */
   initiateMaintenanceAction: async (assetId: number, payload: InitiateMaintenancePayload): Promise<{ message: string }> => {
     const response = await api.patch<{ message: string }>(`/assets/${assetId}/maintenance/initiate`, payload);
     return response.data;
   },
 
-  /**
-   * Dispatches resolution notes and overhead costs to close out calibration loops.
-   * Restores the asset back to standard active fleet tracking configurations.
-   */
   resolveMaintenanceAction: async (assetId: number, payload: MaintenanceResolutionPayload): Promise<{ message: string }> => {
     const response = await api.post<{ message: string }>(`/assets/${assetId}/maintenance/resolve`, payload);
     return response.data;
   },
-  /**
-   * Dispatches a fresh procurement batch entry collection to the database context layer.
-   * Cleared for InventoryStaff, Managers, and SystemAdmin profiles.
-   */
+
   importAssetRegistryBatch: async (payload: NewAssetPayloadDto[]): Promise<{ recordsImported: number; message: string }> => {
     const response = await api.post<{ recordsImported: number; message: string }>('/assets/import', payload);
     return response.data;
-  } 
+  },
+
+  updateProperty: async (id: number, payload: UpdatePropertyPayload): Promise<{ message: string }> => {
+    const response = await api.put<{ message: string }>(`/assets/${id}`, payload);
+    return response.data;
+  },
+
+  updateCustodianAssignment: async (id: number, payload: UpdateCustodianPayload): Promise<{ message: string }> => {
+    const response = await api.patch<{ message: string }>(`/assets/${id}/custodian`, payload);
+    return response.data;
+  },
+
+  toggleStickerQueue: async (id: number): Promise<{ isStickerQueued: boolean; message: string }> => {
+    const response = await api.post<{ isStickerQueued: boolean; message: string }>(`/assets/${id}/sticker-queue`);
+    return response.data;
+  },
+
+  getStickerQueue: async (): Promise<Asset[]> => {
+    const response = await api.get<Asset[]>('/assets/sticker-queue');
+    return response.data;
+  },
+
+  verifyInventory: async (id: number): Promise<{ message: string }> => {
+    const response = await api.post<{ message: string }>(`/assets/${id}/verify-inventory`);
+    return response.data;
+  },
+
+  uploadImage: async (file: File): Promise<{ imageUrl: string; message: string }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await api.post<{ imageUrl: string; message: string }>(
+      '/assets/upload-image', 
+      formData, 
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+    return response.data;
+  },
+
+  activateAsset: async (id: number): Promise<{ message: string }> => {
+    const response = await api.post<{ message: string }>(`/assets/${id}/activate`);
+    return response.data;
+  },
 };
