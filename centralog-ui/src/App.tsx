@@ -1,13 +1,15 @@
-// File path: centralog-ui/src/App.tsx
+// centralog-ui/src/App.tsx
 
 import { useState, useEffect } from 'react';
 import { api, assetApiEnriched, type Asset, type DashboardSummary, type PagedResult } from './services/api';
 import { useAuth } from './context/AuthContext';
 import { LoginPortal } from './components/LoginPortal'; 
-import { Search, ShieldAlert, CheckCircle, RotateCw, Server, Package, Trash2, Layers, MapPin, Hash, DollarSign, ArrowLeftRight, Wrench, LogOut, UserCheck } from 'lucide-react';
+import { Search, ShieldAlert, CheckCircle, RotateCw, Server, Package, Trash2, Layers, MapPin, Hash, DollarSign, ArrowLeftRight, Wrench, LogOut, UserCheck, Upload, Image as ImageIcon, Tag } from 'lucide-react';
 import './App.css';
 import { AssetDetailSidebar } from './components/AssetDetailSidebar';
 import { FinancialLedgerReport } from './components/FinancialLedgerReport';
+import { PropertyOverview } from './components/PropertyOverview';
+import { StickerQueueModal } from './components/StickerQueueModal';
 
 type LEDGER_THEMES = 'theme-obsidian' | 'theme-light' | 'theme-dmc';
 
@@ -18,6 +20,7 @@ function App() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
+  const [activeOverviewAssetId, setActiveOverviewAssetId] = useState<number | null>(null);
 
   const [selectedAssetIds, setSelectedAssetIds] = useState<number[]>([]);
   const [showTransferModal, setShowTransferModal] = useState(false);
@@ -25,6 +28,33 @@ function App() {
   const [newCustodian, setNewCustodian] = useState<number>(1);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
   const [activeInspectedAsset, setActiveInspectedAsset] = useState<Asset | null>(null);
+
+  // STICKER QUEUE & MEDIA UPLOADER STATES
+  const [showStickerQueueModal, setShowStickerQueueModal] = useState<boolean>(false);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string>('');
+  const [isUploadingImage, setIsUploadingImage] = useState<boolean>(false);
+
+  // VIEW TOGGLE STATE (Accountants default to ledger view; others default to operational dashboard)
+  const [accountantTab, setAccountantTab] = useState<'ledger' | 'dashboard'>('dashboard');
+
+  useEffect(() => {
+    if (user?.roleName === 'Accountant') {
+      setAccountantTab('ledger');
+    }
+  }, [user]);
+
+  // PROCUREMENT SUGGESTIONS & AUTOCOMPLETE STATES
+  const [nameInputValue, setNameInputValue] = useState<string>('');
+  const [hardwareNameSuggestions, setHardwareNameSuggestions] = useState<string[]>([]);
+  const [categorySuggestions, setCategorySuggestions] = useState<string[]>([
+    'Workstations',
+    'Infrastructure',
+    'Peripherals',
+    'ICT Equipment',
+    'Office Equipment',
+    'Laboratory Hardware'
+  ]);
+  const [selectedCategory, setSelectedCategory] = useState<string>('Workstations');
 
   const loadDashboardMetrics = async () => {
     if (!isAuthenticated) return;
@@ -51,12 +81,37 @@ function App() {
     }
   };
 
+  const loadProcurementSuggestions = async () => {
+    if (!isAuthenticated) return;
+    try {
+      const cats = await assetApiEnriched.getCategoryTagSuggestions();
+      setCategorySuggestions(cats);
+      const names = await assetApiEnriched.getHardwareNameSuggestions();
+      setHardwareNameSuggestions(names);
+    } catch (err) {
+      console.warn('Procurement suggestions fetch error:', err);
+    }
+  };
+
   useEffect(() => {
     if (isAuthenticated) {
       loadDashboardMetrics();
       loadAssetsList();
+      loadProcurementSuggestions();
     }
   }, [isAuthenticated]);
+
+  const handleNameInputChange = async (val: string) => {
+    setNameInputValue(val);
+    if (val.trim().length > 0) {
+      try {
+        const matches = await assetApiEnriched.getHardwareNameSuggestions(val.trim());
+        setHardwareNameSuggestions(matches);
+      } catch (err) {
+        console.warn('Name autocomplete lookup failed:', err);
+      }
+    }
+  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,7 +144,6 @@ function App() {
 
   const handleInitiateMaintenance = async (assetId: number) => {
     try {
-      // Dispatches the payload directly to the .NET API via the unified interceptor stack
       const response = await assetApiEnriched.initiateMaintenanceAction(assetId, {
         issueDescription: "Threshold alert tripped. Transferred automatically to diagnostic calibration loop.",
         isUrgent: true
@@ -103,13 +157,12 @@ function App() {
     }
   };
 
- const handleResolveMaintenance = async (assetId: number) => {
+  const handleResolveMaintenance = async (assetId: number) => {
     try {
-      // Dispatches the final resolution metadata cleanly to clear the database block
       const response = await assetApiEnriched.resolveMaintenanceAction(assetId, {
         resolutionNotes: "Routine calibration workflow completed under standard deployment parameters.",
         repairCost: 0.00,
-        targetState: 2 // Maps back cleanly to LifecycleState.Active
+        targetState: 2
       });
       
       setActionFeedback(response.message);
@@ -117,6 +170,35 @@ function App() {
       await loadAssetsList(searchTerm);
     } catch (error: any) {
       setActionFeedback(`Resolution Failed: ${error.message || 'Action rejected.'}`);
+    }
+  };
+
+  const handleActivateAsset = async (assetId: number) => {
+    try {
+      const response = await assetApiEnriched.activateAsset(assetId);
+      setActionFeedback(response.message);
+      await loadDashboardMetrics();
+      await loadAssetsList(searchTerm);
+    } catch (error: any) {
+      setActionFeedback(`Activation Failed: ${error.message || 'Action rejected.'}`);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingImage(true);
+    setActionFeedback("Uploading hardware photo file...");
+
+    try {
+      const uploadRes = await assetApiEnriched.uploadImage(file);
+      setUploadedImageUrl(uploadRes.imageUrl);
+      setActionFeedback(uploadRes.message);
+    } catch (err: any) {
+      setActionFeedback(`File Upload Failed: ${err.message}`);
+    } finally {
+      setIsUploadingImage(false);
     }
   };
 
@@ -138,6 +220,17 @@ function App() {
     return (
       <div className={`app-viewport ${currentTheme}`}>
         <LoginPortal />
+      </div>
+    );
+  }
+
+  if (activeOverviewAssetId) {
+    return (
+      <div className={`app-viewport ${currentTheme}`}>
+        <PropertyOverview 
+          assetId={activeOverviewAssetId} 
+          onBack={() => setActiveOverviewAssetId(null)} 
+        />
       </div>
     );
   }
@@ -167,7 +260,19 @@ function App() {
         </div>
 
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button onClick={() => { loadDashboardMetrics(); loadAssetsList(searchTerm); }} className="action-button secondary">
+          {hasClearance(['Accountant', 'SystemAdmin']) && (
+            <button 
+              onClick={() => setAccountantTab(prev => prev === 'ledger' ? 'dashboard' : 'ledger')} 
+              className={`action-button ${accountantTab === 'ledger' ? 'primary' : 'secondary'}`}
+              title="Toggle Financial Depreciation Ledger View"
+            >
+              <DollarSign size={14} /> {accountantTab === 'ledger' ? (user?.roleName === 'Accountant' ? 'Directory Explorer' : 'Operational View') : 'Financial Ledger'}
+            </button>
+          )}
+          <button onClick={() => setShowStickerQueueModal(true)} className="action-button secondary" title="Open Batch Sticker Print Queue">
+            <Tag size={14} /> Sticker Queue
+          </button>
+          <button onClick={() => { loadDashboardMetrics(); loadAssetsList(searchTerm); loadProcurementSuggestions(); }} className="action-button secondary">
             <RotateCw size={14} className={loading ? "spin" : ""} /> Sync Matrix
           </button>
           <button onClick={logoutSession} className="action-button secondary" style={{ borderColor: 'var(--clr-danger)', color: 'var(--clr-danger)' }} title="Terminate Ledger Session">
@@ -183,8 +288,8 @@ function App() {
         </div>
       )}
 
-      {/* Hide extraneous dashboard elements if Accountant role is active to keep print layout clean */}
-      {user?.roleName !== 'Accountant' && (
+      {/* RENDER TOP METRICS, FILTERS, AND PROCUREMENT FOR NON-LEDGER VIEWS */}
+      {accountantTab !== 'ledger' && (
         <>
           {summary && (
             <section className="stats-container">
@@ -207,7 +312,7 @@ function App() {
             </section>
           )}
 
-          {selectedAssetIds.length > 0 && (
+          {selectedAssetIds.length > 0 && user?.roleName !== 'Accountant' && (
             <div className="filter-panel" style={{ background: 'var(--surface)', padding: '16px', borderRadius: '8px', border: '1px solid var(--accent)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <span className="mono" style={{ fontSize: '14px' }}>Selected Matrix Tokens: <strong>{selectedAssetIds.length}</strong> items chosen.</span>
               {hasClearance(['Manager', 'SystemAdmin']) ? (
@@ -255,8 +360,6 @@ function App() {
             </section>
           )}
 
-          {/* File path: centralog-ui/src/App.tsx */}
-          {/* COOPERATIVE ASSET ONBOARDING DRAWER - EXPOSED TO CUSTODIANS AND MANAGERS */}
           {hasClearance(['Inventory Staff', 'InventoryStaff', 'Manager', 'SystemAdmin']) && (
             <section className="filter-panel" style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border)', marginBottom: '24px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', borderBottom: '1px solid var(--border)', paddingBottom: '10px' }}>
@@ -269,12 +372,20 @@ function App() {
                 const form = e.currentTarget;
                 const formData = new FormData(form);
                 
+                const resolvedCategory = selectedCategory.trim();
+
+                if (!resolvedCategory) {
+                  setActionFeedback("Registration Failure: Please specify a valid category classification.");
+                  return;
+                }
+
                 const payload = {
-                  name: String(formData.get('assetName')).trim(),
-                  categoryTag: String(formData.get('categoryTag')).trim(),
+                  name: nameInputValue.trim(),
+                  categoryTag: resolvedCategory,
                   procurementCost: Number(formData.get('procurementCost')),
                   roomId: Number(formData.get('roomId')),
-                  custodianId: Number(formData.get('custodianId'))
+                  custodianId: Number(formData.get('custodianId')),
+                  imageUrl: uploadedImageUrl || undefined
                 };
 
                 try {
@@ -282,26 +393,84 @@ function App() {
                   const result = await assetApiEnriched.importAssetRegistryBatch([payload]);
                   setActionFeedback(result.message);
                   form.reset();
+                  setNameInputValue('');
+                  setSelectedCategory('Workstations');
+                  setUploadedImageUrl('');
                   await loadDashboardMetrics();
                   await loadAssetsList(searchTerm);
+                  await loadProcurementSuggestions();
                 } catch (err: any) {
                   setActionFeedback(`Registration Failure: ${err.message || 'Validation error.'}`);
                 }
               }} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px', alignItems: 'end' }}>
-                
                 <div>
-                  <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase' }}>Hardware Name</label>
-                  <input type="text" name="assetName" required placeholder="e.g., Lenovo Legion R7" style={{ width: '100%', boxSizing: 'border-box', padding: '10px', backgroundColor: 'var(--canvas)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: '4px', outline: 'none' }} />
+                  <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase' }}>
+                    Hardware Name
+                  </label>
+                  <input 
+                    type="text" 
+                    name="assetName" 
+                    required 
+                    list="hardware-name-history-list"
+                    value={nameInputValue}
+                    onChange={(e) => handleNameInputChange(e.target.value)}
+                    placeholder="e.g., Lenovo Legion R7" 
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '10px', backgroundColor: 'var(--canvas)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: '4px', outline: 'none' }} 
+                  />
+                  <datalist id="hardware-name-history-list">
+                    {hardwareNameSuggestions.map((suggestion, idx) => (
+                      <option key={idx} value={suggestion} />
+                    ))}
+                  </datalist>
                 </div>
 
+                {/* UNIFIED CLASSIFICATION COMBOBOX */}
                 <div>
-                  <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase' }}>Classification Category</label>
-                  <input type="text" name="categoryTag" required placeholder="e.g., Workstations" style={{ width: '100%', boxSizing: 'border-box', padding: '10px', backgroundColor: 'var(--canvas)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: '4px', outline: 'none' }} />
+                  <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase' }}>
+                    Classification Category
+                  </label>
+                  <input 
+                    type="text" 
+                    required
+                    list="classification-category-list"
+                    value={selectedCategory} 
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    placeholder="Select or type custom category..."
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '10px', backgroundColor: 'var(--canvas)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: '4px', outline: 'none', height: '38px' }}
+                  />
+                  <datalist id="classification-category-list">
+                    {categorySuggestions.map((cat, idx) => (
+                      <option key={idx} value={cat} />
+                    ))}
+                  </datalist>
                 </div>
 
                 <div>
                   <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase' }}>Procurement Cost (₱)</label>
                   <input type="number" name="procurementCost" required min="1" placeholder="65000" style={{ width: '100%', boxSizing: 'border-box', padding: '10px', backgroundColor: 'var(--canvas)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: '4px', outline: 'none' }} />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase' }}>Hardware Photo File</label>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', backgroundColor: 'var(--canvas)', border: '1px dashed var(--border)', borderRadius: '4px', padding: '6px 10px', gap: '8px' }}>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handleFileUpload} 
+                      disabled={isUploadingImage}
+                      style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }} 
+                    />
+                    {isUploadingImage ? (
+                      <RotateCw size={16} className="spin text-bright" />
+                    ) : uploadedImageUrl ? (
+                      <ImageIcon size={16} className="text-success" />
+                    ) : (
+                      <Upload size={16} style={{ color: 'var(--text-muted)' }} />
+                    )}
+                    <span style={{ fontSize: '12px', color: uploadedImageUrl ? 'var(--clr-success)' : 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {isUploadingImage ? 'Uploading...' : uploadedImageUrl ? 'Photo Attached' : 'Choose Image File'}
+                    </span>
+                  </div>
                 </div>
 
                 <div>
@@ -327,6 +496,7 @@ function App() {
               </form>
             </section>
           )}
+
           <section className="filter-panel">
             <form onSubmit={handleSearch} className="search-form">
               <div className="input-group">
@@ -340,34 +510,34 @@ function App() {
       )}
 
       <main className="content-deck">
-        {user?.roleName === 'Accountant' ? (
+        {accountantTab === 'ledger' ? (
           <FinancialLedgerReport />
+        ) : loading ? (
+          <div className="loader-overlay"><div className="spinner"></div><p>Querying live transactional tracking logs...</p></div>
         ) : (
-          loading ? (
-            <div className="loader-overlay"><div className="spinner"></div><p>Querying live transactional tracking logs...</p></div>
-          ) : (
-            <div className="table-viewport">
-              <table className="modern-table ledger-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: '40px' }}><input type="checkbox" disabled /></th>
-                    <th><Hash size={14} /> ID</th>
-                    <th>Hardware Descriptor</th>
-                    <th><Layers size={14} /> Classification</th>
-                    <th>Value Basis</th>
-                    <th><MapPin size={14} /> Deployment Hub</th>
-                    <th>Status Matrix / Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {assets.length > 0 ? (
-                    assets.map((asset) => (
-                      <tr 
-                        key={asset.id} 
-                        className={asset.isMaintenanceFlagged ? "row-maintenance flagged-row" : ""}
-                        style={{ cursor: 'pointer' }}
-                        onClick={() => setActiveInspectedAsset(asset)}
-                      >
+          <div className="table-viewport">
+            <table className="modern-table ledger-table">
+              <thead>
+                <tr>
+                  {user?.roleName !== 'Accountant' && <th style={{ width: '40px' }}><input type="checkbox" disabled /></th>}
+                  <th><Hash size={14} /> ID</th>
+                  <th>Hardware Descriptor</th>
+                  <th><Layers size={14} /> Classification</th>
+                  <th>Value Basis</th>
+                  <th><MapPin size={14} /> Deployment Hub</th>
+                  <th>Status Matrix / Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {assets.length > 0 ? (
+                  assets.map((asset) => (
+                    <tr 
+                      key={asset.id} 
+                      className={asset.isMaintenanceFlagged ? "row-maintenance flagged-row" : ""}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => setActiveInspectedAsset(asset)}
+                    >
+                      {user?.roleName !== 'Accountant' && (
                         <td onClick={(e) => e.stopPropagation()}>
                           <input 
                             type="checkbox" 
@@ -376,53 +546,57 @@ function App() {
                             onChange={() => toggleSelectAsset(asset.id)} 
                           />
                         </td>
-                        <td className="mono">#{asset.id}</td>
-                        <td>
-                          <div className="asset-meta-cell">
-                            <span className="asset-primary-name">{asset.name}</span>
-                            <span className="asset-secondary-tag">System Identifier Hash: CL-ID-{asset.id} • Relational Handler Key: #{asset.custodianId}</span>
-                          </div>
-                        </td>
-                        <td><span className="category-pill">{asset.categoryTag}</span></td>
-                        <td className="price-text mono">₱{asset.procurementCost.toLocaleString()}</td>
-                        <td><span className="location-text mono">Room Reference: #{asset.roomId}</span></td>
-                        <td onClick={(e) => e.stopPropagation()}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            {getStatusBadge(asset.lifecycleState, asset.isMaintenanceFlagged)}
-                            
-                            {asset.lifecycleState === 2 && hasClearance(['Inventory Staff', 'Manager']) && (
-                              <button onClick={() => handleInitiateMaintenance(asset.id)} className="action-button secondary" style={{ padding: '4px 8px', fontSize: '11px' }}>
-                                <Wrench size={10} /> Lock for Repair
-                              </button>
-                            )}
-                            {asset.lifecycleState === 3 && hasClearance(['Inventory Staff', 'Manager']) && (
-                              <button onClick={() => handleResolveMaintenance(asset.id)} className="action-button primary" style={{ padding: '4px 8px', fontSize: '11px' }}>
-                                <CheckCircle size={10} /> Resolve Repairs
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={7} className="empty-state-cell">
-                        <Trash2 size={40} className="empty-icon" />
-                        <h3>No Operational Records Found</h3>
-                        <p>Adjust your search text to hit alternative partitions.</p>
+                      )}
+                      <td className="mono">#{asset.id}</td>
+                      <td>
+                        <div className="asset-meta-cell">
+                          <span className="asset-primary-name">{asset.name}</span>
+                          <span className="asset-secondary-tag">System Identifier Hash: CL-ID-{asset.id} • Relational Handler Key: #{asset.custodianId}</span>
+                        </div>
+                      </td>
+                      <td><span className="category-pill">{asset.categoryTag}</span></td>
+                      <td className="price-text mono">₱{asset.procurementCost.toLocaleString()}</td>
+                      <td><span className="location-text mono">Room Reference: #{asset.roomId}</span></td>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {getStatusBadge(asset.lifecycleState, asset.isMaintenanceFlagged)}
+                          
+                          {asset.lifecycleState === 2 && hasClearance(['Inventory Staff', 'Manager', 'SystemAdmin']) && (
+                            <button onClick={() => handleInitiateMaintenance(asset.id)} className="action-button secondary" style={{ padding: '4px 8px', fontSize: '11px' }}>
+                              <Wrench size={10} /> Lock for Repair
+                            </button>
+                          )}
+                          {asset.lifecycleState === 3 && hasClearance(['Inventory Staff', 'Manager', 'SystemAdmin']) && (
+                            <button onClick={() => handleResolveMaintenance(asset.id)} className="action-button primary" style={{ padding: '4px 8px', fontSize: '11px' }}>
+                              <CheckCircle size={10} /> Resolve Repairs
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={user?.roleName === 'Accountant' ? 6 : 7} className="empty-state-cell">
+                      <Trash2 size={40} className="empty-icon" />
+                      <h3>No Operational Records Found</h3>
+                      <p>Adjust your search text to hit alternative partitions.</p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         )}
       </main>
 
       <AssetDetailSidebar 
         asset={activeInspectedAsset}
         onClose={() => setActiveInspectedAsset(null)}
+        onActivateAsset={async (id) => {
+          await handleActivateAsset(id);
+          setActiveInspectedAsset(prev => prev ? { ...prev, lifecycleState: 2 } : null);
+        }}
         onInitiateMaintenance={async (id) => {
           await handleInitiateMaintenance(id);
           setActiveInspectedAsset(prev => prev ? { ...prev, lifecycleState: 3 } : null);
@@ -430,6 +604,18 @@ function App() {
         onResolveMaintenance={async (id) => {
           await handleResolveMaintenance(id);
           setActiveInspectedAsset(prev => prev ? { ...prev, lifecycleState: 2, isMaintenanceFlagged: false } : null);
+        }}
+        onOpenOverview={(id) => {
+          setActiveInspectedAsset(null);
+          setActiveOverviewAssetId(id);
+        }}
+      />
+
+      <StickerQueueModal 
+        isOpen={showStickerQueueModal}
+        onClose={() => setShowStickerQueueModal(false)}
+        onQueueUpdated={() => {
+          loadAssetsList(searchTerm);
         }}
       />
     </div>

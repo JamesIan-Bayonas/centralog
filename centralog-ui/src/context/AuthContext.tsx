@@ -43,10 +43,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   };
 
-  const hasClearance = (allowedRoles: string[]): boolean => {
-    if (!user) return false;
-    return allowedRoles.includes(user.roleName);
-  };
+const hasClearance = (allowedRoles: string[]): boolean => {
+  if (!user) return false;
+  // SystemAdmin automatically holds universal superuser clearance across all operational tiers
+  if (user.roleName === 'SystemAdmin') return true;
+  return allowedRoles.includes(user.roleName);
+};
 
   return (
     <AuthContext.Provider value={{

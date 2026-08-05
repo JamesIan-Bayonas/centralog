@@ -32,7 +32,9 @@ const mockMaintenanceAsset: Asset = {
 describe('CentraLog UI Lifecycle & RBAC Boundary Safeguards', () => {
   const onInitiateMock = jest.fn();
   const onResolveMock = jest.fn();
+  const onActivateMock = jest.fn();
   const onCloseMock = jest.fn();
+  const onOpenOverviewMock = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -49,10 +51,12 @@ describe('CentraLog UI Lifecycle & RBAC Boundary Safeguards', () => {
         onClose={onCloseMock}
         onInitiateMaintenance={onInitiateMock}
         onResolveMaintenance={onResolveMock}
+        onActivateAsset={onActivateMock}
+        onOpenOverview={onOpenOverviewMock}
       />
     );
 
-    expect(screen.queryByText(/Sequential Lifecycle Phase Advance/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/System Actions & Lifecycle Control/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Transfer Out to Active Repair Loop/i })).not.toBeInTheDocument();
   });
 
@@ -67,15 +71,40 @@ describe('CentraLog UI Lifecycle & RBAC Boundary Safeguards', () => {
         onClose={onCloseMock}
         onInitiateMaintenance={onInitiateMock}
         onResolveMaintenance={onResolveMock}
+        onActivateAsset={onActivateMock}
+        onOpenOverview={onOpenOverviewMock}
       />
     );
 
     expect(screen.getByText(/\* Real-time calculation frozen for duration of maintenance window status/i)).toBeInTheDocument();
     
-    const resolveBtn = screen.getByRole('button', { name: /Sign Off Calibration Workflow Completion/i });
+    const resolveBtn = screen.getByRole('button', { name: /Confirm Repair Completion & Unfreeze Asset/i });
     expect(resolveBtn).toBeInTheDocument();
 
     fireEvent.click(resolveBtn);
     expect(onResolveMock).toHaveBeenCalledWith(101);
+  });
+
+  it('[CRITICAL-UI-03]: Must trigger Property Overview navigation when Inspect button is pressed', () => {
+    mockedUseAuth.mockReturnValue({
+      hasClearance: (roles: string[]) => roles.includes('Inventory Staff')
+    });
+
+    render(
+      <AssetDetailSidebar 
+        asset={mockActiveAsset} 
+        onClose={onCloseMock}
+        onInitiateMaintenance={onInitiateMock}
+        onResolveMaintenance={onResolveMock}
+        onActivateAsset={onActivateMock}
+        onOpenOverview={onOpenOverviewMock}
+      />
+    );
+
+    const inspectBtn = screen.getByRole('button', { name: /Inspect Full Property Dashboard/i });
+    expect(inspectBtn).toBeInTheDocument();
+
+    fireEvent.click(inspectBtn);
+    expect(onOpenOverviewMock).toHaveBeenCalledWith(101);
   });
 });

@@ -1,9 +1,13 @@
 ﻿// CentraLog.API/Controllers/AssetController.cs
+
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
@@ -22,6 +26,53 @@ namespace CentraLog.API.Controllers
         public AssetController(IAssetService assetService)
         {
             _assetService = assetService;
+        }
+
+        [HttpPost("upload-image")]
+        [Authorize(Roles = "Manager,InventoryStaff,SystemAdmin")]
+        [Consumes("multipart/form-data")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status415UnsupportedMediaType)]
+        public async Task<IActionResult> UploadImage([FromForm] IFormFile file, [FromServices] IWebHostEnvironment env)
+        {
+            if (file == null || file.Length == 0)
+            {
+                return BadRequest(new { message = "Upload Rejected: File payload is empty or missing." });
+            }
+
+            if (file.Length > 5 * 1024 * 1024)
+            {
+                return BadRequest(new { message = "Upload Rejected: Image size exceeds maximum 5MB security threshold." });
+            }
+
+            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".webp", ".svg" };
+            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+
+            if (!allowedExtensions.Contains(extension))
+            {
+                return BadRequest(new { message = "Upload Rejected: Invalid format. Only JPG, PNG, WEBP, and SVG image files are allowed." });
+            }
+
+            var rootPath = env.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+            var uploadsFolder = Path.Combine(rootPath, "uploads");
+
+            if (!Directory.Exists(uploadsFolder))
+            {
+                Directory.CreateDirectory(uploadsFolder);
+            }
+
+            var uniqueFileName = $"{Guid.NewGuid()}{extension}";
+            var destinationFilePath = Path.Combine(uploadsFolder, uniqueFileName);
+
+            using (var stream = new FileStream(destinationFilePath, FileMode.Create))
+            {
+                await file.CopyToAsync(stream);
+            }
+
+            var relativeUrl = $"/uploads/{uniqueFileName}";
+            return Ok(new { imageUrl = relativeUrl, message = "Binary media payload stored successfully." });
         }
 
         [HttpGet("search")]
@@ -115,7 +166,7 @@ namespace CentraLog.API.Controllers
         }
 
         [HttpPatch("{id:int}/maintenance/initiate")]
-        [Authorize(Roles = "InventoryStaff,SystemAdmin")]
+        [Authorize(Roles = "InventoryStaff,Manager,SystemAdmin")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -138,6 +189,8 @@ namespace CentraLog.API.Controllers
             }
         }
 
+        // CentraLog.API/Controllers/AssetController.cs
+
         [HttpPost("{id:int}/dispose")]
         [Authorize(Roles = "Manager,SystemAdmin")]
         [ProducesResponseType(StatusCodes.Status200OK)]
@@ -151,7 +204,7 @@ namespace CentraLog.API.Controllers
             {
                 int adminUserId = GetCurrentUserId();
                 await _assetService.DisposeAssetAsync(id, dto, adminUserId, cancellationToken);
-                return Ok(new { message = $"Asset with ID {id} has been permanently decommissioned and removed from active corporate capitalization registers." });
+                return Ok(new { message = $"Asset #{id} has been permanently decommissioned and removed from active corporate capitalization registers." });
             }
             catch (KeyNotFoundException ex)
             {
@@ -159,7 +212,7 @@ namespace CentraLog.API.Controllers
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return UnprocessableEntity(new { message = ex.Message });
             }
         }
 
@@ -185,7 +238,7 @@ namespace CentraLog.API.Controllers
         }
 
         [HttpPost("{id:int}/maintenance/resolve")]
-        [Authorize(Roles = "InventoryStaff,SystemAdmin")]
+        [Authorize(Roles = "InventoryStaff,Manager,SystemAdmin")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -281,8 +334,6 @@ namespace CentraLog.API.Controllers
             return Ok(queue);
         }
 
-        // Append this controller action method inside CentraLog.API.Controllers.AssetController class:
-
         [HttpPost("{id:int}/verify-inventory")]
         [Authorize(Roles = "Manager,InventoryStaff,SystemAdmin")]
         [ProducesResponseType(StatusCodes.Status200OK)]
@@ -299,6 +350,44 @@ namespace CentraLog.API.Controllers
             }
             catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
             catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+        }
+
+        // Append this endpoint action method inside AssetController.cs:
+        [HttpPost("{id:int}/activate")]
+        [Authorize(Roles = "Manager,InventoryStaff,SystemAdmin")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> ActivateAsset([FromRoute] int id, CancellationToken cancellationToken)
+        {
+            try
+            {
+                int userId = GetCurrentUserId();
+                await _assetService.ActivateAssetAsync(id, userId, cancellationToken);
+                return Ok(new { message = $"Asset #{id} has been successfully deployed to active operational fleet status." });
+            }
+            catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+            catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+        }
+
+        // Append these endpoints inside CentraLog.API.Controllers.AssetController class:
+
+        [HttpGet("suggestions/names")]
+        [Authorize]
+        [ProducesResponseType(typeof(List<string>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetHardwareNameSuggestions([FromQuery] string? query, CancellationToken cancellationToken)
+        {
+            var suggestions = await _assetService.GetHardwareNameSuggestionsAsync(query, cancellationToken);
+            return Ok(suggestions);
+        }
+
+        [HttpGet("suggestions/categories")]
+        [Authorize]
+        [ProducesResponseType(typeof(List<string>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetCategoryTagSuggestions(CancellationToken cancellationToken)
+        {
+            var categories = await _assetService.GetCategoryTagSuggestionsAsync(cancellationToken);
+            return Ok(categories);
         }
     }
 }
