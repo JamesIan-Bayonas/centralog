@@ -265,5 +265,42 @@ namespace CentraLog.Tests.Integration
             var jsonString = await response.Content.ReadAsStringAsync();
             Assert.Contains("/uploads/", jsonString);
         }
+
+        // Append these test cases to CentraLog.Tests.Integration.AssetControllerTests class:
+
+        [Fact]
+        public async Task GetHardwareNameSuggestions_ReturnsFilteredDistinctNames()
+        {
+            using var scope = _factory.Services.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            await SeedIsolatedDatabaseAsync(context);
+
+            var client = CreateAuthenticatedClient(UserRole.InventoryStaff);
+
+            var response = await client.GetAsync("/api/v1/assets/suggestions/names?query=Unit");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            var suggestions = await response.Content.ReadFromJsonAsync<List<string>>();
+            Assert.NotNull(suggestions);
+            Assert.Contains("Asset Unit Alpha", suggestions);
+        }
+
+        [Fact]
+        public async Task GetCategoryTagSuggestions_ReturnsMergedCommonAndDatabaseCategories()
+        {
+            using var scope = _factory.Services.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            await SeedIsolatedDatabaseAsync(context);
+
+            var client = CreateAuthenticatedClient(UserRole.InventoryStaff);
+
+            var response = await client.GetAsync("/api/v1/assets/suggestions/categories");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            var categories = await response.Content.ReadFromJsonAsync<List<string>>();
+            Assert.NotNull(categories);
+            Assert.Contains("Workstations", categories);
+            Assert.Contains("Infrastructure", categories);
+        }
     }
 }

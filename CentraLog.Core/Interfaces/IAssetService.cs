@@ -20,13 +20,16 @@ namespace CentraLog.Core.Interfaces
         Task<bool> ExecuteBulkTransferAsync(BulkTransferRequestDto dto, int adminUserId, CancellationToken cancellationToken = default);
         Task<DepreciationLedgerReportDto> GetDepreciationLedgerReportAsync(CancellationToken cancellationToken = default);
 
-        // --- NEW PROPERTY OVERVIEW & STICKER QUEUE CONTRACTS ---
+        // --- PROPERTY OVERVIEW & STICKER QUEUE CONTRACTS ---
         Task<bool> UpdatePropertyAsync(int assetId, UpdatePropertyCommandDto dto, int adminUserId, CancellationToken cancellationToken = default);
         Task<bool> UpdateCustodianAssignmentAsync(int assetId, UpdateCustodianCommandDto dto, int adminUserId, CancellationToken cancellationToken = default);
         Task<bool> ToggleStickerQueueAsync(int assetId, CancellationToken cancellationToken = default);
         Task<List<Asset>> GetStickerQueueAsync(CancellationToken cancellationToken = default);
         Task<bool> VerifyInventoryAsync(int assetId, int adminUserId, CancellationToken cancellationToken = default);
-        // Append this method contract to IAssetService:
         Task<bool> ActivateAssetAsync(int assetId, int adminUserId, CancellationToken cancellationToken = default);
+
+        // --- PROCUREMENT SUGGESTION CONTRACTS ---
+        Task<List<string>> GetHardwareNameSuggestionsAsync(string? query, CancellationToken cancellationToken = default);
+        Task<List<string>> GetCategoryTagSuggestionsAsync(CancellationToken cancellationToken = default);
     }
 }

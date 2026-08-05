@@ -595,5 +595,49 @@ namespace CentraLog.Infrastructure.Services
                 }
             });
         }
+
+        // Append these method implementations inside CentraLog.Infrastructure.Services.AssetService class:
+
+        public async Task<List<string>> GetHardwareNameSuggestionsAsync(string? query, CancellationToken cancellationToken = default)
+        {
+            var assetQuery = _context.Assets.AsNoTracking();
+
+            if (!string.IsNullOrWhiteSpace(query))
+            {
+                assetQuery = assetQuery.Where(a => a.Name.Contains(query));
+            }
+
+            return await assetQuery
+                .Select(a => a.Name)
+                .Distinct()
+                .OrderBy(name => name)
+                .Take(15)
+                .ToListAsync(cancellationToken);
+        }
+
+        public async Task<List<string>> GetCategoryTagSuggestionsAsync(CancellationToken cancellationToken = default)
+        {
+            var defaultCommonCategories = new List<string>
+            {
+                "Workstations",
+                "Infrastructure",
+                "Peripherals",
+                "ICT Equipment",
+                "Office Equipment",
+                "Laboratory Hardware"
+            };
+
+            var databaseCategories = await _context.Assets
+                .AsNoTracking()
+                .Select(a => a.CategoryTag)
+                .Where(c => !string.IsNullOrEmpty(c))
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+            return defaultCommonCategories
+                .Union(databaseCategories, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(c => c)
+                .ToList();
+        }
     }
 }
