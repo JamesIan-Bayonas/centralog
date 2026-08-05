@@ -144,8 +144,25 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
     if (!asset) return;
     setIsSubmitting(true);
     setActionFeedback(null);
+
+    // Sanitize acquisitionDate and optional strings prior to API dispatch
+    const sanitizedAcquisitionDate = editForm.acquisitionDate && !isNaN(Date.parse(editForm.acquisitionDate))
+      ? editForm.acquisitionDate
+      : new Date().toISOString().split('T')[0];
+
+    const sanitizedPayload: UpdatePropertyPayload = {
+      ...editForm,
+      name: editForm.name.trim(),
+      propertyNumber: editForm.propertyNumber?.trim() || '',
+      serialNumber: editForm.serialNumber?.trim() || '',
+      accountCategory: editForm.accountCategory?.trim() || '',
+      categoryTag: editForm.categoryTag?.trim() || '',
+      acquisitionDate: sanitizedAcquisitionDate,
+      description: editForm.description?.trim() || ''
+    };
+
     try {
-      const response = await assetApiEnriched.updateProperty(asset.id, editForm);
+      const response = await assetApiEnriched.updateProperty(asset.id, sanitizedPayload);
       setActionFeedback(response.message);
       setShowEditModal(false);
       await loadData();
