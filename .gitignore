@@ -58,3 +58,15 @@ centralog-ui/node_modules/.tmp/
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+
+# =========================================================================
+# WEBDEPLOY & VISUAL STUDIO PUBLISH PROFILES
+# =========================================================================
+# Ignore user-specific publish state, encrypted credentials, and publish history
+*.pubxml.user
+
+# OPTIONAL: Uncomment the line below ONLY if you want to ignore ALL publish profiles 
+# (e.g., if publish settings are created dynamically or vary per developer)
+CentraLog.API/Properties/PublishProfiles/
+repomix-output.xml
