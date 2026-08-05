@@ -1,5 +1,10 @@
 <Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".gitignore" />
+    <File Path=".runsettings" />
+  </Folder>
   <Project Path="CentraLog.API/CentraLog.API.csproj" />
   <Project Path="CentraLog.Core/CentraLog.Core.csproj" />
   <Project Path="CentraLog.Infrastructure/CentraLog.Infrastructure.csproj" />
+  <Project Path="CentraLog.Tests/CentraLog.Tests.csproj" Id="7e82c684-847d-4995-9c4d-fcad193ac00f" />
 </Solution>

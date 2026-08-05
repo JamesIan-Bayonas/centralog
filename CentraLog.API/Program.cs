@@ -1,3 +1,5 @@
+// CentraLog.API/Program.cs
+
 using System;
 using System.Text;
 using Microsoft.AspNetCore.Builder;
@@ -100,6 +102,9 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseCors("CorsPolicy");
+
+// ENFORCE STATIC FILE SERVING FOR UPLOADED ASSET MEDIA
+app.UseStaticFiles();
 
 app.UseAuthentication();
 app.UseAuthorization();
