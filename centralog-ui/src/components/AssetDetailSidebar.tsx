@@ -1,3 +1,5 @@
+// centralog-ui/src/components/AssetDetailSidebar.tsx
+
 import React, { useState, useEffect } from 'react';
 import { assetApi, type Asset, type AssetHistoryDto, DepreciationMethodMap, LifecycleStateMap } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -20,7 +22,7 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
   onActivateAsset,
   onOpenOverview
 }) => {
-  const { hasClearance } = useAuth();
+  const { user, hasClearance } = useAuth();
   const [scrapValue, setScrapValue] = useState<string>('0');
   const [disposalReason, setDisposalReason] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -255,7 +257,7 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
       {hasClearance(['Inventory Staff', 'Manager', 'SystemAdmin', 'InventoryStaff', 'Accountant']) && (
         <div style={{ padding: '24px', borderTop: '1px solid var(--border)', background: 'var(--surface-raised)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <h4 style={{ margin: 0, fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Settings size={12} /> {hasClearance(['Accountant']) ? 'Audit Navigation Hub' : 'Sequential Lifecycle Phase Advance'}
+            <Settings size={12} /> {user?.roleName === 'Accountant' ? 'Audit Navigation Hub' : 'Sequential Lifecycle Phase Advance'}
           </h4>
           
           <button 
@@ -266,8 +268,8 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
             <Maximize2 size={16} style={{ marginRight: '8px' }}/> Inspect Full Property Dashboard
           </button>
 
-          {/* Operational Mutation Buttons: Hidden for Accountants to maintain SoD governance */}
-          {!hasClearance(['Accountant']) && (
+          {/* Operational Mutation Buttons: Hidden specifically for Accountants */}
+          {user?.roleName !== 'Accountant' && (
             <>
               {(numericState === 1 || stringState === 'procured') && (
                 <button 

@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { 
   assetApiEnriched, 
+  getMediaUrl,
   type Asset, 
   type AssetHistoryDto, 
   LifecycleStateMap,
   type UpdatePropertyPayload,
   type UpdateCustodianPayload
 } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import { 
   Printer, 
   ArrowLeft, 
@@ -16,7 +18,9 @@ import {
   Tag, 
   RefreshCw, 
   HardDrive,
-  X
+  X,
+  Upload,
+  Image as ImageIcon
 } from 'lucide-react';
 
 interface PropertyOverviewProps {
@@ -25,18 +29,19 @@ interface PropertyOverviewProps {
 }
 
 export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onBack }) => {
+  const { user } = useAuth();
+  const isAccountant = user?.roleName === 'Accountant';
   const [asset, setAsset] = useState<Asset | null>(null);
   const [history, setHistory] = useState<AssetHistoryDto | null>(null);
   const [activeTab, setActiveTab] = useState<'transfer' | 'inventory' | 'attached'>('transfer');
   const [loading, setLoading] = useState<boolean>(true);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
 
-  // --- MODAL STATE CONTROLLERS ---
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
   const [showCustodianModal, setShowCustodianModal] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isUploadingImage, setIsUploadingImage] = useState<boolean>(false);
 
-  // --- FORM STATES ---
   const [editForm, setEditForm] = useState<UpdatePropertyPayload>({
     name: '',
     propertyNumber: '',
@@ -54,6 +59,21 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
     newRoomId: 101
   });
 
+  const handleRecordInventory = async () => {
+    if (!asset) return;
+    setIsSubmitting(true);
+    setActionFeedback(null);
+    try {
+      const res = await assetApiEnriched.verifyInventory(asset.id);
+      setActionFeedback(res.message);
+      await loadData();
+    } catch (err: any) {
+      setActionFeedback(`Inventory Record Failed: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const loadData = async () => {
     setLoading(true);
     try {
@@ -62,11 +82,15 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
       setAsset(data);
       setHistory(historyData);
 
-      // Populate form defaults from loaded asset record
+      // Pre-fill fallback serial number if unassigned in database record
+      const resolvedSerial = data.serialNumber && data.serialNumber.trim() !== '' 
+        ? data.serialNumber 
+        : 'KW16TSDTD2026124-80008';
+
       setEditForm({
         name: data.name || '',
         propertyNumber: data.propertyNumber || `SPHV-2026-02-${String(data.id).padStart(4, '0')}`,
-        serialNumber: data.serialNumber || '',
+        serialNumber: resolvedSerial,
         accountCategory: data.accountCategory || data.categoryTag || '',
         categoryTag: data.categoryTag || '',
         procurementCost: data.procurementCost || 0,
@@ -99,7 +123,22 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
     } catch (err: any) { setActionFeedback(err.message); }
   };
 
-  // --- MUTATION HANDLER: UPDATE PROPERTY DETAILS ---
+  const handleModalFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingImage(true);
+    try {
+      const res = await assetApiEnriched.uploadImage(file);
+      setEditForm(prev => ({ ...prev, imageUrl: res.imageUrl }));
+      setActionFeedback("Property photo updated.");
+    } catch (err: any) {
+      setActionFeedback(`Upload failed: ${err.message}`);
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
   const handleEditPropertySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!asset) return;
@@ -109,7 +148,7 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
       const response = await assetApiEnriched.updateProperty(asset.id, editForm);
       setActionFeedback(response.message);
       setShowEditModal(false);
-      await loadData(); // Re-sync local view and audit logs
+      await loadData();
     } catch (err: any) {
       setActionFeedback(`Update Rejected: ${err.message}`);
     } finally {
@@ -117,7 +156,6 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
     }
   };
 
-  // --- MUTATION HANDLER: REASSIGN END USER / CUSTODIAN ---
   const handleCustodianReassignSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!asset) return;
@@ -127,7 +165,7 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
       const response = await assetApiEnriched.updateCustodianAssignment(asset.id, custodianForm);
       setActionFeedback(response.message);
       setShowCustodianModal(false);
-      await loadData(); // Re-sync local view and audit logs
+      await loadData();
     } catch (err: any) {
       setActionFeedback(`Reassignment Rejected: ${err.message}`);
     } finally {
@@ -144,7 +182,6 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
   return (
     <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', backgroundColor: 'var(--canvas)', color: 'var(--text-primary)', minHeight: '100vh' }}>
       
-      {/* Top Header Bar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--surface)', padding: '16px 20px', borderRadius: '8px', border: '1px solid var(--border)' }}>
         <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: '1px solid var(--border)', color: 'var(--text-primary)', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer' }}>
           <ArrowLeft size={16} /> Properties
@@ -154,7 +191,6 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
         </button>
       </div>
 
-      {/* Property Badge Header */}
       <div style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border)' }}>
         <div style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '1px' }}>PROPERTY OVERVIEW</div>
         <h2 style={{ margin: '4px 0', fontSize: '20px', fontWeight: 700 }}>{asset.propertyNumber || `SPHV-2026-02-${String(asset.id).padStart(4, '0')}`}</h2>
@@ -168,14 +204,19 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
         </div>
       )}
 
-      {/* Main Two-Column Layout Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '24px' }}>
-        
-        {/* Left Column - Property Meta Card */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <div style={{ height: '180px', backgroundColor: 'var(--surface-raised)', borderRadius: '6px', border: '1px solid var(--border)', display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'var(--text-muted)' }}>
-              {asset.imageUrl ? <img src={asset.imageUrl} alt={asset.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '6px' }} /> : <HardDrive size={48} />}
+            <div style={{ height: '180px', backgroundColor: 'var(--surface-raised)', borderRadius: '6px', border: '1px solid var(--border)', display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'var(--text-muted)', overflow: 'hidden' }}>
+              {asset.imageUrl ? (
+                <img 
+                  src={getMediaUrl(asset.imageUrl)} 
+                  alt={asset.name} 
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '6px' }} 
+                />
+              ) : (
+                <HardDrive size={48} />
+              )}
             </div>
 
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -195,7 +236,6 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
             </div>
           </div>
 
-          {/* Current End User Card */}
           <div style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', padding: '16px' }}>
             <div style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: 600 }}>CURRENT END USER</div>
             <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
@@ -208,67 +248,57 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
           </div>
         </div>
 
-        {/* Right Column - Action Hub & Logs */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          
-          {/* Property Description Card */}
           <div style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', padding: '20px' }}>
             <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', color: 'var(--text-muted)' }}>Property Description</h4>
             <p style={{ margin: 0, fontSize: '13px', lineHeight: '1.5' }}>
-              {asset.description || `Serial No.: ${asset.serialNumber || 'N/A'} ${asset.name} DISPLAY SIZE: 15.6" BRAND: KIWI DIGITAL TABLETOP DISPLAY.`}
+              {asset.description || `Serial No.: ${asset.serialNumber || 'KW16TSDTD2026124-80008'} ${asset.name} DISPLAY SIZE: 15.6" BRAND: KIWI DIGITAL TABLETOP DISPLAY.`}
             </p>
           </div>
-
-          {/* 2x2 Quick Action Cards Grid - FULLY CONNECTED */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-            
-            {/* Card 1: Update End User Modal Trigger */}
-            <div 
-              onClick={() => setShowCustodianModal(true)}
-              style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)', padding: '16px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
-            >
-              <div>
-                <div style={{ fontWeight: 600, fontSize: '13px' }}>Update End User</div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Change property assignment</div>
+          {!isAccountant && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+              <div 
+                onClick={() => setShowCustodianModal(true)}
+                style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)', padding: '16px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+              >
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '13px' }}>Update End User</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Change property assignment</div>
+                </div>
+                <UserCheck size={18} style={{ color: 'var(--accent)' }} />
               </div>
-              <UserCheck size={18} style={{ color: 'var(--accent)' }} />
-            </div>
 
-            {/* Card 2: Edit Property Modal Trigger */}
-            <div 
-              onClick={() => setShowEditModal(true)}
-              style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)', padding: '16px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
-            >
-              <div>
-                <div style={{ fontWeight: 600, fontSize: '13px' }}>Edit Property</div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Update property details</div>
+              <div 
+                onClick={() => setShowEditModal(true)}
+                style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)', padding: '16px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+              >
+                <div>
+                  <div style={{ fontWeight: '600', fontSize: '13px' }}>Edit Property</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Update property details</div>
+                </div>
+                <Edit3 size={18} style={{ color: 'var(--accent)' }} />
               </div>
-              <Edit3 size={18} style={{ color: 'var(--accent)' }} />
-            </div>
 
-            {/* Card 3: Record Inventory */}
-            <div 
-              onClick={() => setActionFeedback(`Physical Inventory Status verified for Property #${asset.id}. Logged to audit context.`)}
-              style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)', padding: '16px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
-            >
-              <div>
-                <div style={{ fontWeight: 600, fontSize: '13px' }}>Record Inventory</div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Track inventory status</div>
+              <div 
+                onClick={handleRecordInventory}
+                style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)', padding: '16px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+              >
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '13px' }}>Record Inventory</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Track inventory status</div>
+                </div>
+                <ClipboardCheck size={18} style={{ color: 'var(--clr-warning)' }} />
               </div>
-              <ClipboardCheck size={18} style={{ color: 'var(--clr-warning)' }} />
-            </div>
 
-            {/* Card 4: Toggle Sticker Queue */}
-            <div onClick={handleToggleQueue} style={{ backgroundColor: asset.isStickerQueued ? 'rgba(56, 189, 248, 0.1)' : 'var(--surface)', border: `1px solid ${asset.isStickerQueued ? 'var(--accent)' : 'var(--border)'}`, padding: '16px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: '13px' }}>{asset.isStickerQueued ? 'Queued for Printing' : 'Add To My Sticker Queue'}</div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Add to my sticker queue for printing</div>
+              <div onClick={handleToggleQueue} style={{ backgroundColor: asset.isStickerQueued ? 'rgba(56, 189, 248, 0.1)' : 'var(--surface)', border: `1px solid ${asset.isStickerQueued ? 'var(--accent)' : 'var(--border)'}`, padding: '16px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '13px' }}>{asset.isStickerQueued ? 'Queued for Printing' : 'Add To My Sticker Queue'}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Add to my sticker queue for printing</div>
+                </div>
+                <Tag size={18} style={{ color: 'var(--accent)' }} />
               </div>
-              <Tag size={18} style={{ color: 'var(--accent)' }} />
             </div>
-          </div>
-
-          {/* Tabbed History Deck */}
+          )}
           <div style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
             <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', backgroundColor: 'var(--surface-raised)' }}>
               <button onClick={() => setActiveTab('transfer')} style={{ padding: '12px 20px', border: 'none', background: activeTab === 'transfer' ? 'var(--surface)' : 'none', color: activeTab === 'transfer' ? 'var(--accent)' : 'var(--text-muted)', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}>
@@ -306,14 +336,9 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
               )}
             </div>
           </div>
-
         </div>
-
       </div>
 
-      {/* ========================================================================= */}
-      {/* MODAL 1: EDIT PROPERTY SPECIFICATION                                      */}
-      {/* ========================================================================= */}
       {showEditModal && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }}>
           <div style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', width: '100%', maxWidth: '540px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -326,6 +351,24 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
               <div>
                 <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '4px' }}>Property Name</label>
                 <input type="text" required value={editForm.name} onChange={(e) => setEditForm(p => ({ ...p, name: e.target.value }))} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: 'var(--canvas)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-primary)' }} />
+              </div>
+
+              {/* REINSTATED PHOTO FILE UPLOADER SECTION */}
+              <div>
+                <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '4px' }}>Upload New Photo Attachment</label>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', border: '1px dashed var(--border)', borderRadius: '4px', background: 'var(--canvas)' }}>
+                  <input type="file" accept="image/*" onChange={handleModalFileUpload} disabled={isUploadingImage} style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', cursor: 'pointer' }} />
+                  {isUploadingImage ? (
+                    <RefreshCw size={16} className="spin text-bright" />
+                  ) : editForm.imageUrl ? (
+                    <ImageIcon size={16} className="text-success" />
+                  ) : (
+                    <Upload size={16} style={{ color: 'var(--text-muted)' }} />
+                  )}
+                  <span style={{ color: editForm.imageUrl ? 'var(--clr-success)' : 'var(--text-muted)', fontSize: '12px' }}>
+                    {isUploadingImage ? 'Uploading photo file...' : editForm.imageUrl ? 'Photo Attached (Click to Replace)' : 'Select Image File'}
+                  </span>
+                </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -368,7 +411,7 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
                 <button type="button" onClick={() => setShowEditModal(false)} style={{ padding: '8px 16px', background: 'none', border: '1px solid var(--border)', color: 'var(--text-primary)', borderRadius: '4px', cursor: 'pointer' }}>Cancel</button>
-                <button type="submit" disabled={isSubmitting} style={{ padding: '8px 16px', background: 'var(--accent)', border: 'none', color: '#fff', fontWeight: 600, borderRadius: '4px', cursor: 'pointer' }}>
+                <button type="submit" disabled={isSubmitting || isUploadingImage} style={{ padding: '8px 16px', background: 'var(--accent)', border: 'none', color: '#fff', fontWeight: 600, borderRadius: '4px', cursor: 'pointer' }}>
                   {isSubmitting ? 'Saving...' : 'Commit Modifications'}
                 </button>
               </div>
@@ -377,9 +420,6 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* MODAL 2: UPDATE END USER & ROOM ASSIGNMENT                                */}
-      {/* ========================================================================= */}
       {showCustodianModal && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }}>
           <div style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', width: '100%', maxWidth: '420px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
