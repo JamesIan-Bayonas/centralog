@@ -410,13 +410,13 @@ namespace CentraLog.Infrastructure.Services
 
             var timestamp = DateTime.UtcNow;
             asset.Name = dto.Name;
-            asset.PropertyNumber = dto.PropertyNumber;
-            asset.SerialNumber = dto.SerialNumber;
-            asset.AccountCategory = dto.AccountCategory;
-            asset.CategoryTag = dto.CategoryTag;
+            asset.PropertyNumber = dto.PropertyNumber ?? string.Empty;
+            asset.SerialNumber = dto.SerialNumber ?? string.Empty;
+            asset.AccountCategory = dto.AccountCategory ?? string.Empty;
+            asset.CategoryTag = dto.CategoryTag ?? string.Empty;
             asset.ProcurementCost = dto.ProcurementCost;
-            asset.AcquisitionDate = dto.AcquisitionDate;
-            asset.Description = dto.Description;
+            asset.AcquisitionDate = dto.AcquisitionDate ?? DateTime.UtcNow;
+            asset.Description = dto.Description ?? string.Empty;
             asset.ImageUrl = dto.ImageUrl;
             asset.UpdatedAt = timestamp;
 
