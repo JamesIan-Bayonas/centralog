@@ -3,7 +3,7 @@
 > **Executive Summary:** CentraLog resolves institutional asset control challenges by synthesizing physical chain-of-custody tracking with dynamic financial accounting. Designed as a decoupled .NET 8 Web API and React 19 SPA, the platform automates preventative maintenance sweeps, multi-custodian bulk relocations, and real-time asset depreciation ledger calculations across enterprise IT fleets.
 
 ---
-![Example Highlight](centralog-ui/src/assets/example-highlight.png)
+![Example Highlight](centralog-ui/src/assets/highlight.png)
 
 ## Overview & Architectural Deep Dive
 
