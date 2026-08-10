@@ -65,6 +65,9 @@ export interface Asset {
   imageUrl?: string;
   isStickerQueued?: boolean;
   description?: string;
+
+  isTemporary?: boolean;
+  expiresAt?: string | null;
 }
 
 export interface DashboardSummary {

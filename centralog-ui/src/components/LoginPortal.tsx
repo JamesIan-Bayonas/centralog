@@ -554,43 +554,41 @@ export const LoginPortal: React.FC = () => {
               </div>
 
               {/* AUDIT TESTING PRESET QUICK-FILL DECK */}
-              {import.meta.env.DEV && (
-                <div>
-                  <div className="form-label" style={{ marginBottom: '4px', fontSize: '10px', opacity: 0.7 }}>
-                    Development Quick Credentials
-                  </div>
-                  <div className="preset-pill-deck">
-                    <button 
-                      type="button" 
-                      onClick={() => applyCredentialPreset('admin_cl', 'AdminPass123!')}
-                      className="preset-pill"
-                    >
-                      admin_cl
-                    </button>
-                    <button 
-                      type="button" 
-                      onClick={() => applyCredentialPreset('manager_cl', 'ManagerPass123!')}
-                      className="preset-pill"
-                    >
-                      manager_cl
-                    </button>
-                    <button 
-                      type="button" 
-                      onClick={() => applyCredentialPreset('staff_cl', 'StaffPass123!')}
-                      className="preset-pill"
-                    >
-                      staff_cl
-                    </button>
-                    <button 
-                      type="button" 
-                      onClick={() => applyCredentialPreset('accountant_cl', 'AccountantPass123!')}
-                      className="preset-pill"
-                    >
-                      accountant_cl
-                    </button>
-                  </div>
+              <div>
+                <div className="form-label" style={{ marginBottom: '4px', fontSize: '10px', opacity: 0.7 }}>
+                  Quick Credential Presets
                 </div>
-              )}
+                <div className="preset-pill-deck">
+                  <button 
+                    type="button" 
+                    onClick={() => applyCredentialPreset('admin_cl', 'AdminPass123!')}
+                    className="preset-pill"
+                  >
+                    admin_cl
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => applyCredentialPreset('manager_cl', 'ManagerPass123!')}
+                    className="preset-pill"
+                  >
+                    manager_cl
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => applyCredentialPreset('staff_cl', 'StaffPass123!')}
+                    className="preset-pill"
+                  >
+                    staff_cl
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => applyCredentialPreset('accountant_cl', 'AccountantPass123!')}
+                    className="preset-pill"
+                  >
+                    accountant_cl
+                  </button>
+                </div>
+              </div>
 
               <button
                 type="submit"

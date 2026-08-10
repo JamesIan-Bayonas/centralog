@@ -206,12 +206,13 @@ function App() {
     window.print();
   };
 
-  const getStatusBadge = (state: number, flagged: boolean) => {
+  const getStatusBadge = (state: number, flagged: boolean, isTemporary?: boolean) => {
     if (flagged) return <span className="status-badge status-danger">Urgent Alert</span>;
+    if (isTemporary) return <span className="status-badge status-warning" style={{ border: '1px dashed var(--clr-warning)' }}>Sandbox (Auto-Clears)</span>;
     switch (state) {
       case 2: return <span className="status-badge status-success">Active Fleet</span>;
       case 3: return <span className="status-badge status-warning">In Repair Loop</span>;
-      case 5: return <span className="status-badge status-disposed">Disposed</span>;
+      case 5: return <span className="status-badge status-danger">Disposed</span>;
       default: return <span className="status-badge status-neutral">Procured</span>;
     }
   };

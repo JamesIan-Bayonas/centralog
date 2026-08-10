@@ -50,13 +50,12 @@ namespace CentraLog.Infrastructure.BackgroundServices
         {
             _logger.LogInformation("Initializing periodic background inspection check across relational tables...");
 
-            // Spin up an isolated dependency injection lifecycle boundary
             using var scope = _scopeFactory.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
             var currentTime = DateTime.UtcNow;
 
-            // Isolate active target items where next_service_date has expired but flag is not yet tripped
+            // 1. Overdue Preventative Maintenance Inspection
             var overdueAssets = await context.Assets
                 .Where(a => a.NextServiceDate.HasValue
                          && a.NextServiceDate.Value <= currentTime
@@ -71,20 +70,38 @@ namespace CentraLog.Infrastructure.BackgroundServices
 
                 foreach (var asset in overdueAssets)
                 {
-                    // Alter the preventative system flag to true for frontend chart rendering
                     asset.IsMaintenanceFlagged = true;
                     asset.UpdatedAt = currentTime;
-
-                    _logger.LogInformation("Maintenance Alert applied to Asset ID {Id} ({Name}) - Threshold Date: {Date}",
-                        asset.Id, asset.Name, asset.NextServiceDate);
                 }
 
-                // Commit flags back to XAMPP MySQL database disk memory
                 await context.SaveChangesAsync(cancellationToken);
             }
-            else
+
+            // 2. Ephemeral Sandbox Data Purge Sweep (Database Tier Protection)
+            var expiredTemporaryAssets = await context.Assets
+                .Where(a => a.IsTemporary && a.ExpiresAt.HasValue && a.ExpiresAt.Value <= currentTime)
+                .ToListAsync(cancellationToken);
+
+            if (expiredTemporaryAssets.Any())
             {
-                _logger.LogInformation("Inspection complete. Zero preventative threshold violations detected.");
+                _logger.LogWarning("Daemon detected {Count} expired temporary sandbox asset(s). Executing database storage purge...", expiredTemporaryAssets.Count);
+
+                var expiredAssetIds = expiredTemporaryAssets.Select(a => a.Id).ToList();
+
+                var orphanAuditLogs = await context.AuditLogs
+                    .Where(l => expiredAssetIds.Contains(l.AssetId))
+                    .ToListAsync(cancellationToken);
+
+                var orphanMaintenanceLogs = await context.MaintenanceLogs
+                    .Where(m => expiredAssetIds.Contains(m.AssetId))
+                    .ToListAsync(cancellationToken);
+
+                context.AuditLogs.RemoveRange(orphanAuditLogs);
+                context.MaintenanceLogs.RemoveRange(orphanMaintenanceLogs);
+                context.Assets.RemoveRange(expiredTemporaryAssets);
+
+                await context.SaveChangesAsync(cancellationToken);
+                _logger.LogInformation("Purge sweep complete. Successfully freed database storage capacity.");
             }
         }
     }
