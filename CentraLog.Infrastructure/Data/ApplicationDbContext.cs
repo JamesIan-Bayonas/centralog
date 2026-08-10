@@ -38,15 +38,18 @@ namespace CentraLog.Infrastructure.Data
             }
 
             // Asset Data Layout Map
+            // Asset Data Layout Map
             modelBuilder.Entity<Asset>(entity =>
             {
-                entity.ToTable("assets"); // Enforces explicit lowercase name match
+                entity.ToTable("assets");
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Name).IsRequired().HasMaxLength(255);
                 entity.Property(e => e.CategoryTag).HasMaxLength(100);
                 entity.Property(e => e.ProcurementCost).HasColumnType("decimal(18,2)");
                 entity.Property(e => e.LifecycleState).HasConversion<int>();
                 entity.Property(e => e.IsMaintenanceFlagged).HasDefaultValue(false);
+                entity.Property(e => e.IsTemporary).HasDefaultValue(false);
+                entity.Property(e => e.ExpiresAt).HasColumnType("datetime(6)");
             });
 
             // Audit Trail Data Layout Map

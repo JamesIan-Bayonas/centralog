@@ -534,22 +534,35 @@ namespace CentraLog.Infrastructure.Services
         public async Task<int> ImportAssetBatchAsync(IEnumerable<ImportAssetRowDto> items, CancellationToken cancellationToken = default)
         {
             var timestamp = DateTime.UtcNow;
-            var assetsToInsert = items.Select(row => new Asset
-            {
-                Name = row.Name,
-                CategoryTag = row.CategoryTag,
-                ProcurementCost = row.ProcurementCost,
-                RoomId = row.RoomId,
-                CustodianId = row.CustodianId,
-                ImageUrl = row.ImageUrl,
-                LifecycleState = LifecycleState.Procured,
-                CreatedAt = timestamp,
-                UpdatedAt = timestamp
-            }).ToList();
+            var expirationTimestamp = timestamp.AddHours(2);
+            var newAssets = new List<Asset>();
 
-            await _context.Assets.AddRangeAsync(assetsToInsert, cancellationToken);
+            foreach (var item in items)
+            {
+                if (string.IsNullOrWhiteSpace(item.Name))
+                {
+                    throw new ArgumentException("Procurement Import Failed: Hardware descriptor name cannot be blank.");
+                }
+
+                newAssets.Add(new Asset
+                {
+                    Name = item.Name.Trim(),
+                    CategoryTag = string.IsNullOrWhiteSpace(item.CategoryTag) ? "General" : item.CategoryTag.Trim(),
+                    ProcurementCost = item.ProcurementCost,
+                    RoomId = item.RoomId,
+                    CustodianId = item.CustodianId,
+                    ImageUrl = item.ImageUrl,
+                    LifecycleState = LifecycleState.Procured,
+                    CreatedAt = timestamp,
+                    UpdatedAt = timestamp,
+                    IsTemporary = true,
+                    ExpiresAt = expirationTimestamp
+                });
+            }
+
+            await _context.Assets.AddRangeAsync(newAssets, cancellationToken);
             await _context.SaveChangesAsync(cancellationToken);
-            return assetsToInsert.Count;
+            return newAssets.Count;
         }
 
         // Append this implementation method inside AssetService.cs:

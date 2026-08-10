@@ -1,6 +1,4 @@
-﻿// CentraLog.Core/Domain/Entities/Asset.cs
-using System;
-using CentraLog.Core.Domain.Enums;
+﻿using CentraLog.Core.Domain.Enums;
 
 namespace CentraLog.Core.Domain.Entities
 {
@@ -29,5 +27,9 @@ namespace CentraLog.Core.Domain.Entities
         public string? ImageUrl { get; set; }
         public bool IsStickerQueued { get; set; } = false;
         public string Description { get; set; } = string.Empty;
+
+        // --- EPHEMERAL DEMO SAFEGUARDS ---
+        public bool IsTemporary { get; set; } = false;
+        public DateTime? ExpiresAt { get; set; }
     }
 }

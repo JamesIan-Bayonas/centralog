@@ -302,5 +302,52 @@ namespace CentraLog.Tests.Integration
             Assert.Contains("Workstations", categories);
             Assert.Contains("Infrastructure", categories);
         }
+
+        [Fact]
+        public async Task BulkImport_UserCreatedAssets_StampsIsTemporaryAndAutoPurgesOnDaemonSweep()
+        {
+            using var scope = _factory.Services.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            await SeedIsolatedDatabaseAsync(context);
+
+            var client = CreateAuthenticatedClient(UserRole.InventoryStaff);
+
+            var importPayload = new List<ImportAssetRowDto>
+            {
+                new()
+                {
+                    Name = "Ephemeral Test Router Unit",
+                    CategoryTag = "Infrastructure",
+                    ProcurementCost = 15000m,
+                    RoomId = 101,
+                    CustodianId = 1
+                }
+            };
+
+            var importResponse = await client.PostAsJsonAsync("/api/v1/assets/import", importPayload);
+            Assert.Equal(HttpStatusCode.OK, importResponse.StatusCode);
+
+            var createdAsset = await context.Assets.FirstOrDefaultAsync(a => a.Name == "Ephemeral Test Router Unit");
+            Assert.NotNull(createdAsset);
+            Assert.True(createdAsset.IsTemporary);
+            Assert.NotNull(createdAsset.ExpiresAt);
+
+            // Simulate 2-hour TTL expiration window breach
+            createdAsset.ExpiresAt = DateTime.UtcNow.AddMinutes(-5);
+            await context.SaveChangesAsync();
+
+            // Trigger daemon execution scope directly
+            var daemon = new CentraLog.Infrastructure.BackgroundServices.MaintenanceDaemonService(
+                _factory.Services.GetRequiredService<IServiceScopeFactory>(),
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<CentraLog.Infrastructure.BackgroundServices.MaintenanceDaemonService>.Instance
+            );
+
+            await daemon.StartAsync(CancellationToken.None);
+            await Task.Delay(500);
+            await daemon.StopAsync(CancellationToken.None);
+
+            var purgedAsset = await context.Assets.FirstOrDefaultAsync(a => a.Id == createdAsset.Id);
+            Assert.Null(purgedAsset);
+        }
     }
 }

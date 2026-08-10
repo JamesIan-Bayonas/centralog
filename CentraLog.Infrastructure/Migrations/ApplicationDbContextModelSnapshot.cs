@@ -17,7 +17,7 @@ namespace CentraLog.Infrastructure.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.0")
+                .HasAnnotation("ProductVersion", "8.0.11")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
 
             MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
@@ -30,6 +30,13 @@ namespace CentraLog.Infrastructure.Migrations
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("AccountCategory")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
+                    b.Property<DateTime>("AcquisitionDate")
+                        .HasColumnType("datetime(6)");
+
                     b.Property<string>("CategoryTag")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -41,10 +48,31 @@ namespace CentraLog.Infrastructure.Migrations
                     b.Property<int>("CustodianId")
                         .HasColumnType("int");
 
+                    b.Property<int>("DepreciationMethod")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
                     b.Property<int>("ExpectedLifespanMonths")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("ImageUrl")
+                        .HasColumnType("longtext");
+
                     b.Property<bool>("IsMaintenanceFlagged")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint(1)")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsStickerQueued")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<bool>("IsTemporary")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("tinyint(1)")
                         .HasDefaultValue(false);
@@ -63,15 +91,26 @@ namespace CentraLog.Infrastructure.Migrations
                     b.Property<decimal>("ProcurementCost")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("PropertyNumber")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
                     b.Property<int>("RoomId")
                         .HasColumnType("int");
+
+                    b.Property<decimal>("SalvageValue")
+                        .HasColumnType("decimal(65,30)");
+
+                    b.Property<string>("SerialNumber")
+                        .IsRequired()
+                        .HasColumnType("longtext");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime(6)");
 
                     b.HasKey("Id");
 
-                    b.ToTable("Assets");
+                    b.ToTable("assets", (string)null);
                 });
 
             modelBuilder.Entity("CentraLog.Core.Domain.Entities.AuditLog", b =>
@@ -105,7 +144,7 @@ namespace CentraLog.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AuditLogs");
+                    b.ToTable("auditlogs", (string)null);
                 });
 
             modelBuilder.Entity("CentraLog.Core.Domain.Entities.MaintenanceLog", b =>
@@ -138,7 +177,7 @@ namespace CentraLog.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("MaintenanceLogs");
+                    b.ToTable("maintenancelogs", (string)null);
                 });
 
             modelBuilder.Entity("CentraLog.Core.Domain.Entities.User", b =>
@@ -172,7 +211,7 @@ namespace CentraLog.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Users");
+                    b.ToTable("users", (string)null);
                 });
 #pragma warning restore 612, 618
         }
