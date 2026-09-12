@@ -357,12 +357,37 @@ namespace CentraLog.Tests.Integration
             var client = CreateAuthenticatedClient(UserRole.InventoryStaff);
 
             var importPayload = new List<ImportAssetRowDto>
-        {
-        new() { Name = "Illegal Entry", CategoryTag = "Workstations", ProcurementCost = 1000m, RoomId = 101, CustodianId = 1 }
-        };
+            {
+                new() { Name = "Illegal Entry", CategoryTag = "Workstations", ProcurementCost = 1000m, RoomId = 101, CustodianId = 1 }
+            };
 
-                var response = await client.PostAsJsonAsync("/api/v1/assets/import", importPayload);
-                Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-            }
+            var response = await client.PostAsJsonAsync("/api/v1/assets/import", importPayload);
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         }
+
+        [Fact]
+        public async Task BulkImport_WithExcessiveProcurementCost_ReturnsBadRequest()
+        {
+            var client = CreateAuthenticatedClient(UserRole.Manager);
+
+            var excessivePayload = new List<ImportAssetRowDto>
+            {
+                new()
+                {
+                    Name = "Enterprise Server Cluster",
+                    CategoryTag = "Infrastructure",
+                    ProcurementCost = 999_999_999_999_999m,
+                    RoomId = 101,
+                    CustodianId = 1
+                }
+            };
+
+            var response = await client.PostAsJsonAsync("/api/v1/assets/import", excessivePayload);
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+            var content = await response.Content.ReadAsStringAsync();
+            Assert.Contains("must be between", content);
+        }
+    }
 }
+

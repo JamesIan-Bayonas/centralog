@@ -413,7 +413,15 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '4px' }}>Procurement Cost (₱)</label>
-                  <input type="number" min="0" value={editForm.procurementCost} onChange={(e) => setEditForm(p => ({ ...p, procurementCost: Number(e.target.value) }))} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: 'var(--canvas)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-primary)' }} />
+                  <input 
+                    type="number" 
+                    min="0" 
+                    max="100000000"
+                    step="0.01"
+                    value={editForm.procurementCost} 
+                    onChange={(e) => setEditForm(p => ({ ...p, procurementCost: Number(e.target.value) }))} 
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: 'var(--canvas)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-primary)' }} 
+                  />
                 </div>
                 <div>
                   <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '4px' }}>Acquisition Date</label>
