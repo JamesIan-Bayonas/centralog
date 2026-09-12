@@ -351,13 +351,14 @@ function App() {
             </div>
           )}
 
-          {hasClearance(['Manager', 'SystemAdmin', 'Accountant']) && (
-            <section className="report-controls-deck">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600 }}>Compliance Export Controls</h3>
-                <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Generate legally binding balance sheets and unmodifiable asset tracking summaries.</p>
+          {/* RESTRICT PROCUREMENT LOG ENTRY TO MANAGERS AND ADMINS */}
+          {hasClearance(['Manager', 'SystemAdmin']) && (
+            <section className="filter-panel" style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border)', marginBottom: '24px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', borderBottom: '1px solid var(--border)', paddingBottom: '10px' }}>
+                <Package size={18} className="text-bright" />
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>Log New Procurement Asset Entry</h3>
               </div>
-              <button onClick={triggerCompliancePrint} className="action-button primary" style={{ marginLeft: 'auto', backgroundColor: 'var(--clr-success)' }}>Export Tabular Report Ledger</button>
+              {/* Form contents */}
             </section>
           )}
 

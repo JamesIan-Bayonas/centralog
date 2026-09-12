@@ -310,7 +310,8 @@ namespace CentraLog.Tests.Integration
             var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
             await SeedIsolatedDatabaseAsync(context);
 
-            var client = CreateAuthenticatedClient(UserRole.InventoryStaff);
+            // Switch to Manager role to pass the authorization gate
+            var client = CreateAuthenticatedClient(UserRole.Manager);
 
             var importPayload = new List<ImportAssetRowDto>
             {
@@ -349,5 +350,19 @@ namespace CentraLog.Tests.Integration
             var purgedAsset = await context.Assets.FirstOrDefaultAsync(a => a.Id == createdAsset.Id);
             Assert.Null(purgedAsset);
         }
-    }
+
+        [Fact]
+        public async Task BulkImport_AsInventoryStaff_ReturnsForbidden()
+        {
+            var client = CreateAuthenticatedClient(UserRole.InventoryStaff);
+
+            var importPayload = new List<ImportAssetRowDto>
+        {
+        new() { Name = "Illegal Entry", CategoryTag = "Workstations", ProcurementCost = 1000m, RoomId = 101, CustodianId = 1 }
+        };
+
+                var response = await client.PostAsJsonAsync("/api/v1/assets/import", importPayload);
+                Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+            }
+        }
 }
