@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { api, assetApiEnriched, type Asset, type DashboardSummary, type PagedResult } from './services/api';
 import { useAuth } from './context/AuthContext';
 import { LoginPortal } from './components/LoginPortal'; 
-import { Search, ShieldAlert, CheckCircle, RotateCw, Server, Package, Trash2, Layers, MapPin, Hash, DollarSign, ArrowLeftRight, Wrench, LogOut, UserCheck, Upload, Image as ImageIcon, Tag } from 'lucide-react';
+import { Search, ShieldAlert, CheckCircle, RotateCw, Server, Package, Trash2, Layers, MapPin, Hash, DollarSign, ArrowLeftRight, Wrench, LogOut, UserCheck, Upload, Image as ImageIcon, X, RotateCcw, Tag } from 'lucide-react';
 import './App.css';
 import { AssetDetailSidebar } from './components/AssetDetailSidebar';
 import { FinancialLedgerReport } from './components/FinancialLedgerReport';
@@ -118,6 +118,20 @@ function App() {
     loadAssetsList(searchTerm);
   };
 
+  // ISSUE #1 FIX: Reset search term and immediately restore full asset inventory
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    loadAssetsList('');
+  };
+
+  // ISSUE #1 FIX: Automatically restore full asset inventory when input is cleared
+  const handleSearchInputChange = (val: string) => {
+    setSearchTerm(val);
+    if (val.trim() === '' && searchTerm.trim() !== '') {
+      loadAssetsList('');
+    }
+  };
+
   const toggleSelectAsset = (id: number) => {
     setSelectedAssetIds(prev => 
       prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
@@ -202,6 +216,7 @@ function App() {
     }
   };
 
+  // Restored: Triggers CSS print format for corporate auditing sheets
   const triggerCompliancePrint = () => {
     window.print();
   };
@@ -351,8 +366,18 @@ function App() {
             </div>
           )}
 
-          {/* RESTRICT PROCUREMENT LOG ENTRY TO MANAGERS AND ADMINS */}
-          {/* RESTRICT PROCUREMENT LOG ENTRY TO MANAGERS AND ADMINS */}
+          {/* COMPLIANCE EXPORT CONTROLS (Uses triggerCompliancePrint) */}
+          {hasClearance(['Manager', 'SystemAdmin', 'Accountant']) && (
+            <section className="report-controls-deck">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600 }}>Compliance Export Controls</h3>
+                <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Generate legally binding balance sheets and unmodifiable asset tracking summaries.</p>
+              </div>
+              <button onClick={triggerCompliancePrint} className="action-button primary" style={{ marginLeft: 'auto', backgroundColor: 'var(--clr-success)' }}>Export Tabular Report Ledger</button>
+            </section>
+          )}
+
+          {/* ISSUE #3 FIX: Exclusively restricted to Manager and SystemAdmin tiers */}
           {hasClearance(['Manager', 'SystemAdmin']) && (
             <section className="filter-panel" style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border)', marginBottom: '24px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', borderBottom: '1px solid var(--border)', paddingBottom: '10px' }}>
@@ -372,7 +397,7 @@ function App() {
                   return;
                 }
 
-                // ◄── PRE-FLIGHT COST CEILING CHECK
+                // ISSUE #2 FIX: Enforce ₱100,000,000.00 client-side pre-flight boundary
                 const procurementCostValue = Number(formData.get('procurementCost'));
                 if (procurementCostValue <= 0 || procurementCostValue > 100000000) {
                   setActionFeedback("Registration Failure: Procurement cost must be between ₱1.00 and ₱100,000,000.00.");
@@ -444,7 +469,7 @@ function App() {
                   </datalist>
                 </div>
 
-                {/* ◄── UPDATED PROCUREMENT COST INPUT WITH MAX AND STEP BOUNDS */}
+                {/* ISSUE #2 FIX: Form input capped with min, max, and step boundaries */}
                 <div>
                   <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase' }}>Procurement Cost (₱)</label>
                   <input 
@@ -506,150 +531,64 @@ function App() {
             </section>
           )}
 
-          {hasClearance(['Inventory Staff', 'InventoryStaff', 'Manager', 'SystemAdmin']) && (
-            <section className="filter-panel" style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border)', marginBottom: '24px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', borderBottom: '1px solid var(--border)', paddingBottom: '10px' }}>
-                <Package size={18} className="text-bright" />
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>Log New Procurement Asset Entry</h3>
-              </div>
-              
-              <form onSubmit={async (e) => {
-                e.preventDefault();
-                const form = e.currentTarget;
-                const formData = new FormData(form);
-                
-                const resolvedCategory = selectedCategory.trim();
-
-                if (!resolvedCategory) {
-                  setActionFeedback("Registration Failure: Please specify a valid category classification.");
-                  return;
-                }
-
-                const payload = {
-                  name: nameInputValue.trim(),
-                  categoryTag: resolvedCategory,
-                  procurementCost: Number(formData.get('procurementCost')),
-                  roomId: Number(formData.get('roomId')),
-                  custodianId: Number(formData.get('custodianId')),
-                  imageUrl: uploadedImageUrl || undefined
-                };
-
-                try {
-                  setActionFeedback("Registering asset inside database context...");
-                  const result = await assetApiEnriched.importAssetRegistryBatch([payload]);
-                  setActionFeedback(result.message);
-                  form.reset();
-                  setNameInputValue('');
-                  setSelectedCategory('Workstations');
-                  setUploadedImageUrl('');
-                  await loadDashboardMetrics();
-                  await loadAssetsList(searchTerm);
-                  await loadProcurementSuggestions();
-                } catch (err: any) {
-                  setActionFeedback(`Registration Failure: ${err.message || 'Validation error.'}`);
-                }
-              }} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px', alignItems: 'end' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase' }}>
-                    Hardware Name
-                  </label>
-                  <input 
-                    type="text" 
-                    name="assetName" 
-                    required 
-                    list="hardware-name-history-list"
-                    value={nameInputValue}
-                    onChange={(e) => handleNameInputChange(e.target.value)}
-                    placeholder="e.g., Lenovo Legion R7" 
-                    style={{ width: '100%', boxSizing: 'border-box', padding: '10px', backgroundColor: 'var(--canvas)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: '4px', outline: 'none' }} 
-                  />
-                  <datalist id="hardware-name-history-list">
-                    {hardwareNameSuggestions.map((suggestion, idx) => (
-                      <option key={idx} value={suggestion} />
-                    ))}
-                  </datalist>
-                </div>
-
-                {/* UNIFIED CLASSIFICATION COMBOBOX */}
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase' }}>
-                    Classification Category
-                  </label>
-                  <input 
-                    type="text" 
-                    required
-                    list="classification-category-list"
-                    value={selectedCategory} 
-                    onChange={(e) => setSelectedCategory(e.target.value)}
-                    placeholder="Select or type custom category..."
-                    style={{ width: '100%', boxSizing: 'border-box', padding: '10px', backgroundColor: 'var(--canvas)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: '4px', outline: 'none', height: '38px' }}
-                  />
-                  <datalist id="classification-category-list">
-                    {categorySuggestions.map((cat, idx) => (
-                      <option key={idx} value={cat} />
-                    ))}
-                  </datalist>
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase' }}>Procurement Cost (₱)</label>
-                  <input type="number" name="procurementCost" required min="1" placeholder="65000" style={{ width: '100%', boxSizing: 'border-box', padding: '10px', backgroundColor: 'var(--canvas)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: '4px', outline: 'none' }} />
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase' }}>Hardware Photo File</label>
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', backgroundColor: 'var(--canvas)', border: '1px dashed var(--border)', borderRadius: '4px', padding: '6px 10px', gap: '8px' }}>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={handleFileUpload} 
-                      disabled={isUploadingImage}
-                      style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }} 
-                    />
-                    {isUploadingImage ? (
-                      <RotateCw size={16} className="spin text-bright" />
-                    ) : uploadedImageUrl ? (
-                      <ImageIcon size={16} className="text-success" />
-                    ) : (
-                      <Upload size={16} style={{ color: 'var(--text-muted)' }} />
-                    )}
-                    <span style={{ fontSize: '12px', color: uploadedImageUrl ? 'var(--clr-success)' : 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {isUploadingImage ? 'Uploading...' : uploadedImageUrl ? 'Photo Attached' : 'Choose Image File'}
-                    </span>
-                  </div>
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase' }}>Physical Room Allocation</label>
-                  <select name="roomId" style={{ width: '100%', boxSizing: 'border-box', padding: '10px', backgroundColor: 'var(--canvas)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: '4px', outline: 'none', height: '38px' }}>
-                    <option value="101">Room 101 (Admin Office)</option>
-                    <option value="202">Room 202 (Server Room)</option>
-                    <option value="303">Room 303 (Laboratory)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase' }}>Assigned Handler Custodian</label>
-                  <select name="custodianId" style={{ width: '100%', boxSizing: 'border-box', padding: '10px', backgroundColor: 'var(--canvas)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: '4px', outline: 'none', height: '38px' }}>
-                    <option value="1">Custodian #1 (Systems Lead)</option>
-                    <option value="2">Custodian #2 (Network Admin)</option>
-                  </select>
-                </div>
-
-                <button type="submit" className="action-button primary" style={{ height: '38px', justifyContent: 'center', width: '100%', fontWeight: 600 }}>
-                  Commit Registry Entry
-                </button>
-              </form>
-            </section>
-          )}
-
+          {/* ISSUE #1 FIX: Reactive search bar with Esc key, inline X button, and clear reset button */}
           <section className="filter-panel">
             <form onSubmit={handleSearch} className="search-form">
-              <div className="input-group">
+              <div className="input-group" style={{ position: 'relative', flexGrow: 1 }}>
                 <Search size={18} className="search-icon" />
-                <input type="text" placeholder="Search assets by hardware descriptor or category tags..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                <input 
+                  type="text" 
+                  placeholder="Search assets by hardware descriptor or category tags..." 
+                  value={searchTerm} 
+                  onChange={(e) => handleSearchInputChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape' && searchTerm) {
+                      handleClearSearch();
+                    }
+                  }}
+                  style={{ paddingRight: searchTerm ? '38px' : '12px' }}
+                />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={handleClearSearch}
+                    style={{
+                      position: 'absolute',
+                      right: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--text-muted)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '4px',
+                      borderRadius: '4px'
+                    }}
+                    title="Clear search query (Esc)"
+                    aria-label="Clear search"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
               </div>
-              <button type="submit" className="action-button primary">Execute Search</button>
+
+              <button type="submit" className="action-button primary">
+                Execute Search
+              </button>
+
+              {searchTerm && (
+                <button 
+                  type="button" 
+                  onClick={handleClearSearch} 
+                  className="action-button secondary"
+                  title="Restore complete asset list"
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <RotateCcw size={14} /> Clear Filter
+                </button>
+              )}
             </form>
           </section>
         </>

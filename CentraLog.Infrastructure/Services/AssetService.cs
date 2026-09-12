@@ -401,6 +401,11 @@ namespace CentraLog.Infrastructure.Services
 
         public async Task<bool> UpdatePropertyAsync(int assetId, UpdatePropertyCommandDto dto, int adminUserId, CancellationToken cancellationToken = default)
         {
+            if (dto.ProcurementCost < 0 || dto.ProcurementCost > 100_000_000.00m)
+            {
+                throw new InvalidOperationException("Procurement cost cannot exceed ₱100,000,000.00.");
+            }
+
             var asset = await _context.Assets.FirstOrDefaultAsync(a => a.Id == assetId, cancellationToken);
             if (asset == null) throw new KeyNotFoundException($"Property ID #{assetId} missing.");
             if (asset.LifecycleState == LifecycleState.Disposed)
@@ -536,6 +541,17 @@ namespace CentraLog.Infrastructure.Services
             var timestamp = DateTime.UtcNow;
             var expirationTimestamp = timestamp.AddHours(2);
             var newAssets = new List<Asset>();
+
+            const decimal MaxProcurementCost = 100_000_000.00m;
+            const decimal MinProcurementCost = 1.00m;
+
+            foreach (var item in items)
+            {
+                if (item.ProcurementCost < MinProcurementCost || item.ProcurementCost > MaxProcurementCost)
+                {
+                    throw new ArgumentException($"Procurement cost for '{item.Name}' is invalid. Values must be between ₱{MinProcurementCost:N2} and ₱{MaxProcurementCost:N2}.");
+                }
+            }
 
             foreach (var item in items)
             {

@@ -126,8 +126,11 @@ namespace CentraLog.API.Controllers
         }
 
         [HttpPost("import")]
+        [Authorize(Roles = "Manager,SystemAdmin")] // ◄── Add RBAC boundary gate
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
         public async Task<IActionResult> BulkImport([FromBody] IEnumerable<ImportAssetRowDto> items, CancellationToken cancellationToken)
         {
             try
