@@ -13,18 +13,26 @@ namespace CentraLog.Infrastructure.Services.Depreciation
             if (asset.ProcurementCost <= asset.SalvageValue || asset.ExpectedLifespanMonths <= 0)
                 return asset.ProcurementCost;
 
-            double totalDaysElapsed = (evaluationTime - asset.CreatedAt).TotalDays;
+            // Normalize to calendar date boundaries to eliminate second-by-second drift
+            DateTime evalDate = evaluationTime.Date;
+            DateTime startDate = asset.CreatedAt.Date;
+
+            int totalDaysElapsed = (evalDate - startDate).Days;
             if (totalDaysElapsed <= 0) return asset.ProcurementCost;
 
-            double maintenanceDays = 0;
+            int maintenanceDays = 0;
             var assetLogs = logs.Where(l => l.AssetId == asset.Id);
             foreach (var log in assetLogs)
             {
-                var endPoint = log.EndTime ?? evaluationTime;
-                maintenanceDays += (endPoint - log.StartTime).TotalDays;
+                DateTime logStart = log.StartTime.Date;
+                DateTime logEnd = (log.EndTime ?? evaluationTime).Date;
+                if (logEnd > logStart)
+                {
+                    maintenanceDays += (logEnd - logStart).Days;
+                }
             }
 
-            double activeDays = Math.Max(0, totalDaysElapsed - maintenanceDays);
+            int activeDays = Math.Max(0, totalDaysElapsed - maintenanceDays);
             double activeMonths = activeDays / 30.4375;
 
             double monthlyDepreciationRate = 2.0 / asset.ExpectedLifespanMonths;

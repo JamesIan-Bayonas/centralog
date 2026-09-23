@@ -30,7 +30,7 @@ namespace CentraLog.Infrastructure.Services
                 DepreciationAlgorithm.StraightLine or _ => new StraightLineStrategy()
             };
 
-            return strategy.CalculateBookValue(asset, logs, DateTime.UtcNow);
+            return strategy.CalculateBookValue(asset, logs, DateTime.UtcNow.Date);
         }
 
         public async Task<DashboardSummaryDto> GetDashboardSummaryAsync(CancellationToken cancellationToken = default)
