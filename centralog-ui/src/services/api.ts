@@ -100,6 +100,12 @@ export interface AssetHistoryDto {
   timelineEntries: AuditLogTimelineEntryDto[];
 }
 
+export interface AuditLogEntryDto extends AuditLogTimelineEntryDto {
+  assetId: number;
+  assetName: string;
+  changeSummary: string;
+}
+
 export interface LedgerAssetRowDto {
   assetId: number;
   assetName: string;
@@ -255,6 +261,11 @@ export const assetApiEnriched = {
   
   getDepreciationLedgerReport: async (): Promise<DepreciationLedgerReportDto> => {
     const response = await api.get<DepreciationLedgerReportDto>('/assets/finance/ledger-report');
+    return response.data;
+  },
+
+  getAuditLog: async (): Promise<AuditLogEntryDto[]> => {
+    const response = await api.get<AuditLogEntryDto[]>('/assets/audit-log');
     return response.data;
   },
 

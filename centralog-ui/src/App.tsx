@@ -4,12 +4,13 @@ import { useState, useEffect } from 'react';
 import { api, assetApiEnriched, type Asset, type DashboardSummary, type PagedResult } from './services/api';
 import { useAuth } from './context/AuthContext';
 import { LoginPortal } from './components/LoginPortal'; 
-import { Search, ShieldAlert, CheckCircle, RotateCw, Server, Package, Trash2, Layers, MapPin, Hash, DollarSign, ArrowLeftRight, Wrench, LogOut, UserCheck, Upload, Image as ImageIcon, X, RotateCcw, Tag } from 'lucide-react';
+import { Search, ShieldAlert, CheckCircle, RotateCw, Server, Package, Trash2, Layers, MapPin, Hash, DollarSign, ArrowLeftRight, Wrench, LogOut, UserCheck, Upload, Image as ImageIcon, X, RotateCcw, Tag, ClipboardList } from 'lucide-react';
 import './App.css';
 import { AssetDetailSidebar } from './components/AssetDetailSidebar';
 import { FinancialLedgerReport } from './components/FinancialLedgerReport';
 import { PropertyOverview } from './components/PropertyOverview';
 import { StickerQueueModal } from './components/StickerQueueModal';
+import { AuditLogReport } from './components/AuditLogReport';
 
 type LEDGER_THEMES = 'theme-obsidian' | 'theme-light' | 'theme-dmc';
 
@@ -35,7 +36,7 @@ function App() {
   const [isUploadingImage, setIsUploadingImage] = useState<boolean>(false);
 
   // VIEW TOGGLE STATE (Accountants default to ledger view; others default to operational dashboard)
-  const [accountantTab, setAccountantTab] = useState<'ledger' | 'dashboard'>('dashboard');
+  const [accountantTab, setAccountantTab] = useState<'ledger' | 'dashboard' | 'audit'>('dashboard');
 
   useEffect(() => {
     if (user?.roleName === 'Accountant') {
@@ -285,6 +286,15 @@ function App() {
               <DollarSign size={14} /> {accountantTab === 'ledger' ? (user?.roleName === 'Accountant' ? 'Directory Explorer' : 'Operational View') : 'Financial Ledger'}
             </button>
           )}
+          {hasClearance(['Accountant', 'SystemAdmin']) && (
+            <button
+              onClick={() => setAccountantTab(prev => prev === 'audit' ? 'dashboard' : 'audit')}
+              className={`action-button ${accountantTab === 'audit' ? 'primary' : 'secondary'}`}
+              title="View read-only asset accountability history"
+            >
+              <ClipboardList size={14} /> {accountantTab === 'audit' ? 'Operational View' : 'Audit Log'}
+            </button>
+          )}
           <button onClick={() => setShowStickerQueueModal(true)} className="action-button secondary" title="Open Batch Sticker Print Queue">
             <Tag size={14} /> Sticker Queue
           </button>
@@ -305,7 +315,7 @@ function App() {
       )}
 
       {/* RENDER TOP METRICS, FILTERS, AND PROCUREMENT FOR NON-LEDGER VIEWS */}
-      {accountantTab !== 'ledger' && (
+      {accountantTab === 'dashboard' && (
         <>
           {summary && (
             <section className="stats-container">
@@ -601,6 +611,8 @@ function App() {
       <main className="content-deck">
         {accountantTab === 'ledger' ? (
           <FinancialLedgerReport />
+        ) : accountantTab === 'audit' ? (
+          <AuditLogReport />
         ) : loading ? (
           <div className="loader-overlay"><div className="spinner"></div><p>Querying live transactional tracking logs...</p></div>
         ) : (
