@@ -101,6 +101,7 @@
 
 .text-success { color: var(--clr-success); }
 .text-warning { color: var(--clr-warning); }
+.text-danger { color: var(--clr-danger); }
 .text-bright { color: var(--accent); }
 
 .filter-panel {

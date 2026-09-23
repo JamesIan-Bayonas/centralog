@@ -322,6 +322,10 @@ function App() {
                 <div className="stat-icon-wrapper yellow"><ShieldAlert size={24} /></div>
               </div>
               <div className="stat-card">
+                <div className="stat-info"><span className="stat-label">Urgent Alerts</span><span className="stat-number text-danger">{summary.urgentAlertCount}</span></div>
+                <div className="stat-icon-wrapper red"><ShieldAlert size={24} /></div>
+              </div>
+              <div className="stat-card">
                 <div className="stat-info"><span className="stat-label">Assessed Asset Value</span><span className="stat-number text-bright">₱{summary.totalSystemValue.toLocaleString()}</span></div>
                 <div className="stat-icon-wrapper balance"><DollarSign size={24} /></div>
               </div>

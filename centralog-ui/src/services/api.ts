@@ -75,6 +75,7 @@ export interface DashboardSummary {
   totalSystemValue: number;
   activeCount: number;
   inMaintenanceCount: number;
+  urgentAlertCount: number;
   disposedCount: number;
 }
 
