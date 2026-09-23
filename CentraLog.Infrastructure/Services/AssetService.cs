@@ -35,15 +35,15 @@ namespace CentraLog.Infrastructure.Services
 
         public async Task<DashboardSummaryDto> GetDashboardSummaryAsync(CancellationToken cancellationToken = default)
         {
-            var assets = await _context.Assets.ToListAsync(cancellationToken);
-            var allMaintenanceLogs = await _context.MaintenanceLogs.ToListAsync(cancellationToken);
+            var assets = await _context.Assets
+                .AsNoTracking()
+                .ToListAsync(cancellationToken);
 
-            decimal totalDepreciatedSystemValue = 0.00m;
-
-            foreach (var asset in assets)
-            {
-                totalDepreciatedSystemValue += CalculateDepreciatedValue(asset, allMaintenanceLogs);
-            }
+            // The dashboard is an inventory summary, so its value must be the recorded
+            // procurement total. Depreciated book value is time-dependent and belongs in
+            // the financial ledger; using it here made an unchanged inventory appear to
+            // have a different price when users opened the dashboard at different times.
+            decimal totalRecordedSystemValue = assets.Sum(asset => asset.ProcurementCost);
 
             var distribution = assets
                 .GroupBy(a => a.CategoryTag)
@@ -52,7 +52,7 @@ namespace CentraLog.Infrastructure.Services
             return new DashboardSummaryDto
             {
                 TotalAssetCount = assets.Count,
-                TotalSystemValue = totalDepreciatedSystemValue,
+                TotalSystemValue = totalRecordedSystemValue,
                 ActiveCount = assets.Count(a => a.LifecycleState == LifecycleState.Active),
                 InMaintenanceCount = assets.Count(a => a.LifecycleState == LifecycleState.InMaintenance),
                 DisposedCount = assets.Count(a => a.LifecycleState == LifecycleState.Disposed),
