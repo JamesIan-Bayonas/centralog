@@ -11,6 +11,7 @@ namespace CentraLog.Core.Interfaces
     {
         Task<PagedResult<Asset>> GetFilteredAssetsAsync(GetAssetsQueryFilterDto filter, CancellationToken cancellationToken = default);
         Task<AssetHistoryDto> GetAssetHistoryAsync(int assetId, CancellationToken cancellationToken = default);
+        Task<List<AuditLogEntryDto>> GetAuditLogAsync(CancellationToken cancellationToken = default);
         Task<bool> DisposeAssetAsync(int assetId, DisposeAssetCommandDto dto, int adminUserId, CancellationToken cancellationToken = default);
         Task<int> ImportAssetBatchAsync(IEnumerable<ImportAssetRowDto> items, CancellationToken cancellationToken = default);
         Task<bool> ResolveMaintenanceActionAsync(int assetId, MaintenanceActionRequestDto dto, int adminUserId, CancellationToken cancellationToken = default);

@@ -124,6 +124,11 @@ namespace CentraLog.Infrastructure.Migrations
                     b.Property<int>("AssetId")
                         .HasColumnType("int");
 
+                    b.Property<string>("ChangeSummary")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)");
+
                     b.Property<int>("ModifiedByUserId")
                         .HasColumnType("int");
 

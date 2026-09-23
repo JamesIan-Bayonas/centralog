@@ -58,6 +58,7 @@ namespace CentraLog.Infrastructure.Data
                 entity.ToTable("auditlogs"); // Enforces explicit lowercase name match
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Timestamp).IsRequired();
+                entity.Property(e => e.ChangeSummary).HasMaxLength(500).IsRequired();
             });
 
             // Maintenance Tracker Data Layout Map

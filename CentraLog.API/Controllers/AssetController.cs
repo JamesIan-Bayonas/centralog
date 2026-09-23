@@ -117,6 +117,17 @@ namespace CentraLog.API.Controllers
             }
         }
 
+        [HttpGet("audit-log")]
+        [Authorize(Roles = "Accountant,SystemAdmin")]
+        [ProducesResponseType(typeof(List<AuditLogEntryDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        public async Task<IActionResult> GetAuditLog(CancellationToken cancellationToken)
+        {
+            var auditLog = await _assetService.GetAuditLogAsync(cancellationToken);
+            return Ok(auditLog);
+        }
+
         [HttpGet("dashboard/summary")]
         [ProducesResponseType(typeof(DashboardSummaryDto), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetDashboardSummary(CancellationToken cancellationToken)

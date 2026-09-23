@@ -12,4 +12,5 @@ public class AuditLog
     public int NewCustodianId { get; set; }
     public int ModifiedByUserId { get; set; }
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    public string ChangeSummary { get; set; } = "Asset record changed";
 }

@@ -26,4 +26,11 @@ namespace CentraLog.Core.DTOs
         public string OperatorUsername { get; set; } = string.Empty;
         public DateTime Timestamp { get; set; }
     }
+
+    public class AuditLogEntryDto : AuditLogTimelineEntryDto
+    {
+        public int AssetId { get; set; }
+        public string AssetName { get; set; } = string.Empty;
+        public string ChangeSummary { get; set; } = string.Empty;
+    }
 }

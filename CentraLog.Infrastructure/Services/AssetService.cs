@@ -92,7 +92,8 @@ namespace CentraLog.Infrastructure.Services
                             OldCustodianId = asset.CustodianId,
                             NewCustodianId = dto.NewCustodianId,
                             ModifiedByUserId = adminUserId,
-                            Timestamp = timestamp
+                            Timestamp = timestamp,
+                            ChangeSummary = "Custodian handoff and room relocation"
                         };
 
                         asset.RoomId = dto.DestinationRoomId;
@@ -196,7 +197,8 @@ namespace CentraLog.Infrastructure.Services
                         OldCustodianId = asset.CustodianId,
                         NewCustodianId = asset.CustodianId,
                         ModifiedByUserId = adminUserId,
-                        Timestamp = timestamp
+                        Timestamp = timestamp,
+                        ChangeSummary = "Asset decommissioned"
                     };
 
                     await _context.AuditLogs.AddAsync(auditLog, cancellationToken);
@@ -294,6 +296,60 @@ namespace CentraLog.Infrastructure.Services
             };
         }
 
+        public async Task<List<AuditLogEntryDto>> GetAuditLogAsync(CancellationToken cancellationToken = default)
+        {
+            var logs = await _context.AuditLogs
+                .AsNoTracking()
+                .OrderByDescending(log => log.Timestamp)
+                .ToListAsync(cancellationToken);
+            var assets = await _context.Assets.AsNoTracking()
+                .ToDictionaryAsync(asset => asset.Id, cancellationToken);
+            var users = await _context.Users.AsNoTracking()
+                .ToDictionaryAsync(user => user.Id, user => user.Username, cancellationToken);
+
+            return logs.Select(log =>
+            {
+                assets.TryGetValue(log.AssetId, out var asset);
+                users.TryGetValue(log.ModifiedByUserId, out var operatorUsername);
+
+                return new AuditLogEntryDto
+                {
+                    LogId = log.Id,
+                    AssetId = log.AssetId,
+                    AssetName = asset?.Name ?? $"Asset #{log.AssetId}",
+                    OldRoomId = log.OldRoomId,
+                    OldRoomName = GetRoomName(log.OldRoomId),
+                    NewRoomId = log.NewRoomId,
+                    NewRoomName = GetRoomName(log.NewRoomId),
+                    OldCustodianId = log.OldCustodianId,
+                    OldCustodianName = GetCustodianName(log.OldCustodianId),
+                    NewCustodianId = log.NewCustodianId,
+                    NewCustodianName = GetCustodianName(log.NewCustodianId),
+                    ModifiedByUserId = log.ModifiedByUserId,
+                    OperatorUsername = operatorUsername ?? "System Automated Daemon",
+                    Timestamp = log.Timestamp,
+                    ChangeSummary = string.IsNullOrWhiteSpace(log.ChangeSummary)
+                        ? "Asset record changed"
+                        : log.ChangeSummary
+                };
+            }).ToList();
+        }
+
+        private static string GetRoomName(int roomId) => roomId switch
+        {
+            101 => "Room 101 (Admin Office)",
+            202 => "Room 202 (Server Room)",
+            303 => "Room 303 (Laboratory)",
+            _ => $"Room #{roomId}"
+        };
+
+        private static string GetCustodianName(int custodianId) => custodianId switch
+        {
+            1 => "Custodian #1 (Systems Lead)",
+            2 => "Custodian #2 (Network Admin)",
+            _ => $"Handler #{custodianId}"
+        };
+
         public async Task<DepreciationLedgerReportDto> GetDepreciationLedgerReportAsync(CancellationToken cancellationToken = default)
         {
             var assets = await _context.Assets.ToListAsync(cancellationToken);
@@ -381,7 +437,8 @@ namespace CentraLog.Infrastructure.Services
                         OldCustodianId = asset.CustodianId,
                         NewCustodianId = asset.CustodianId,
                         ModifiedByUserId = adminUserId,
-                        Timestamp = timestamp
+                        Timestamp = timestamp,
+                        ChangeSummary = "Maintenance resolved"
                     };
 
                     await _context.AuditLogs.AddAsync(auditLog, cancellationToken);
@@ -418,6 +475,17 @@ namespace CentraLog.Infrastructure.Services
             }
 
             var timestamp = DateTime.UtcNow;
+            var changedFields = new List<string>();
+            if (asset.Name != dto.Name) changedFields.Add("hardware name");
+            if (asset.PropertyNumber != (dto.PropertyNumber ?? string.Empty)) changedFields.Add("property number");
+            if (asset.SerialNumber != (dto.SerialNumber ?? string.Empty)) changedFields.Add("serial number");
+            if (asset.AccountCategory != (dto.AccountCategory ?? string.Empty)) changedFields.Add("account category");
+            if (asset.CategoryTag != (dto.CategoryTag ?? string.Empty)) changedFields.Add("classification");
+            if (asset.ProcurementCost != dto.ProcurementCost) changedFields.Add("procurement cost");
+            if (asset.AcquisitionDate != (dto.AcquisitionDate ?? DateTime.UtcNow)) changedFields.Add("acquisition date");
+            if (asset.Description != (dto.Description ?? string.Empty)) changedFields.Add("description");
+            if (asset.ImageUrl != dto.ImageUrl) changedFields.Add("image");
+
             asset.Name = dto.Name;
             asset.PropertyNumber = dto.PropertyNumber ?? string.Empty;
             asset.SerialNumber = dto.SerialNumber ?? string.Empty;
@@ -428,6 +496,21 @@ namespace CentraLog.Infrastructure.Services
             asset.Description = dto.Description ?? string.Empty;
             asset.ImageUrl = dto.ImageUrl;
             asset.UpdatedAt = timestamp;
+
+            if (changedFields.Count > 0)
+            {
+                await _context.AuditLogs.AddAsync(new AuditLog
+                {
+                    AssetId = asset.Id,
+                    OldRoomId = asset.RoomId,
+                    NewRoomId = asset.RoomId,
+                    OldCustodianId = asset.CustodianId,
+                    NewCustodianId = asset.CustodianId,
+                    ModifiedByUserId = adminUserId,
+                    Timestamp = timestamp,
+                    ChangeSummary = $"Asset details updated: {string.Join(", ", changedFields)}"
+                }, cancellationToken);
+            }
 
             await _context.SaveChangesAsync(cancellationToken);
             return true;
@@ -458,7 +541,8 @@ namespace CentraLog.Infrastructure.Services
                         OldCustodianId = asset.CustodianId,
                         NewCustodianId = dto.NewCustodianId,
                         ModifiedByUserId = adminUserId,
-                        Timestamp = timestamp
+                        Timestamp = timestamp,
+                        ChangeSummary = "Custodian handoff and room relocation"
                     };
 
                     asset.CustodianId = dto.NewCustodianId;
