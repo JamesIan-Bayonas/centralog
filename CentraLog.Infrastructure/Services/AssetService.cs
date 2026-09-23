@@ -54,7 +54,11 @@ namespace CentraLog.Infrastructure.Services
                 TotalAssetCount = assets.Count,
                 TotalSystemValue = totalRecordedSystemValue,
                 ActiveCount = assets.Count(a => a.LifecycleState == LifecycleState.Active),
+                // Repairs and overdue-maintenance alerts are distinct operational
+                // conditions. Keep each count separate so the dashboard labels are
+                // unambiguous and an asset matching both conditions is visible in both.
                 InMaintenanceCount = assets.Count(a => a.LifecycleState == LifecycleState.InMaintenance),
+                UrgentAlertCount = assets.Count(a => a.IsMaintenanceFlagged),
                 DisposedCount = assets.Count(a => a.LifecycleState == LifecycleState.Disposed),
                 CategoryDistribution = distribution
             };

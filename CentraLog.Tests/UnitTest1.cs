@@ -46,5 +46,32 @@ namespace CentraLog.Tests
             Assert.Equal(83_500m, firstSummary.TotalSystemValue);
             Assert.Equal(firstSummary.TotalSystemValue, secondSummary.TotalSystemValue);
         }
+
+        [Fact]
+        public async Task GetDashboardSummary_SeparatesRepairAndUrgentAlertCounts()
+        {
+            var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .Options;
+
+            await using var context = new ApplicationDbContext(options);
+            await context.Assets.AddRangeAsync(
+                new Asset { Name = "Repair A", LifecycleState = LifecycleState.InMaintenance },
+                new Asset { Name = "Urgent B", LifecycleState = LifecycleState.Active, IsMaintenanceFlagged = true },
+                new Asset { Name = "Repair C", LifecycleState = LifecycleState.InMaintenance },
+                new Asset { Name = "Active D", LifecycleState = LifecycleState.Active },
+                new Asset
+                {
+                    Name = "Repair and urgent E",
+                    LifecycleState = LifecycleState.InMaintenance,
+                    IsMaintenanceFlagged = true
+                });
+            await context.SaveChangesAsync();
+
+            var summary = await new AssetService(context).GetDashboardSummaryAsync();
+
+            Assert.Equal(3, summary.InMaintenanceCount);
+            Assert.Equal(2, summary.UrgentAlertCount);
+        }
     }
 }
