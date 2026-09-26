@@ -10,38 +10,41 @@
 
 /* THEME: OBSIDIAN CORE */
 .theme-obsidian {
-  --canvas: #06070a;
-  --surface: #0d0f14;
-  --surface-raised: #161922;
-  --border: #242936;
-  --text-primary: #f8fafc;
-  --text-muted: #64748b;
-  --accent: #3b82f6;
-  --row-hover: rgba(59, 130, 246, 0.05);
+  --canvas: #0e1512;
+  --surface: #17221d;
+  --surface-raised: #203027;
+  --border: #3d5647;
+  --text-primary: #f0f6f1;
+  --text-muted: #afc4b5;
+  --accent: #6fcca1;
+  --accent-contrast: #102319;
+  --row-hover: rgba(111, 204, 161, 0.1);
 }
 
 /* THEME: LIGHT LEDGER */
 .theme-light {
-  --canvas: #f1f5f9;
+  --canvas: #f7f8fa;
   --surface: #ffffff;
-  --surface-raised: #f8fafc;
-  --border: #e2e8f0;
-  --text-primary: #0f172a;
-  --text-muted: #94a3b8;
-  --accent: #2563eb;
-  --row-hover: rgba(15, 23, 42, 0.03);
+  --surface-raised: #f0f3f6;
+  --border: #d5dde4;
+  --text-primary: #1d2935;
+  --text-muted: #536170;
+  --accent: #205c48;
+  --accent-contrast: #ffffff;
+  --row-hover: rgba(29, 41, 53, 0.05);
 }
 
 /* THEME: DMC MATRIX */
 .theme-dmc {
-  --canvas: #f4f7f5;
+  --canvas: #f3f7f3;
   --surface: #ffffff;
-  --surface-raised: #ecfdf5;
-  --border: #cbd5e1;
-  --text-primary: #064e3b;
-  --text-muted: #475569;
-  --accent: #059669;
-  --row-hover: rgba(16, 185, 129, 0.08);
+  --surface-raised: #eaf3ec;
+  --border: #c9d9cd;
+  --text-primary: #163d2b;
+  --text-muted: #51695b;
+  --accent: #176b45;
+  --accent-contrast: #ffffff;
+  --row-hover: rgba(23, 107, 69, 0.08);
 }
 
 body { margin: 0; font-family: var(--font-main); transition: background 0.3s; }

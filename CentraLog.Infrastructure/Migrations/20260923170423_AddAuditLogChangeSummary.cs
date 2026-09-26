@@ -20,7 +20,7 @@ namespace CentraLog.Infrastructure.Migrations
                 .Annotation("MySql:CharSet", "utf8mb4");
         }
 
-        /// <inheritdoc />
+        /// <inheritdoc />  
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(

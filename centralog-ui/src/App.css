@@ -165,7 +165,7 @@
 
 .action-button.primary {
   background-color: var(--accent);
-  color: #ffffff;
+  color: var(--accent-contrast, #ffffff);
 }
 
 .action-button.primary:hover {

@@ -16,7 +16,16 @@ type LEDGER_THEMES = 'theme-obsidian' | 'theme-light' | 'theme-dmc';
 
 function App() {
   const { isAuthenticated, user, logoutSession, hasClearance } = useAuth();
-  const [currentTheme, setCurrentTheme] = useState<LEDGER_THEMES>('theme-dmc');
+  const [currentTheme, setCurrentTheme] = useState<LEDGER_THEMES>(() => {
+    const savedTheme = localStorage.getItem('cl_theme');
+    return savedTheme === 'theme-obsidian' || savedTheme === 'theme-light' || savedTheme === 'theme-dmc'
+      ? savedTheme
+      : 'theme-dmc';
+  });
+  const selectTheme = (theme: LEDGER_THEMES) => {
+    setCurrentTheme(theme);
+    localStorage.setItem('cl_theme', theme);
+  };
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -236,7 +245,7 @@ function App() {
   if (!isAuthenticated) {
     return (
       <div className={`app-viewport ${currentTheme}`}>
-        <LoginPortal />
+        <LoginPortal currentTheme={currentTheme} onThemeChange={selectTheme} />
       </div>
     );
   }
@@ -271,9 +280,9 @@ function App() {
         )}
 
         <div className="theme-trigger-deck" style={{ display: 'flex', gap: '8px', marginLeft: 'auto', marginRight: '16px' }}>
-          <button onClick={() => setCurrentTheme('theme-obsidian')} className={`action-button secondary ${currentTheme === 'theme-obsidian' ? 'active' : ''}`}>[OBSIDIAN]</button>
-          <button onClick={() => setCurrentTheme('theme-light')} className={`action-button secondary ${currentTheme === 'theme-light' ? 'active' : ''}`}>[LIGHT]</button>
-          <button onClick={() => setCurrentTheme('theme-dmc')} className={`action-button secondary ${currentTheme === 'theme-dmc' ? 'active' : ''}`}>[DMC MODE]</button>
+          <button onClick={() => selectTheme('theme-obsidian')} className={`action-button secondary ${currentTheme === 'theme-obsidian' ? 'active' : ''}`}>[OBSIDIAN]</button>
+          <button onClick={() => selectTheme('theme-light')} className={`action-button secondary ${currentTheme === 'theme-light' ? 'active' : ''}`}>[LIGHT]</button>
+          <button onClick={() => selectTheme('theme-dmc')} className={`action-button secondary ${currentTheme === 'theme-dmc' ? 'active' : ''}`}>[DMC MODE]</button>
         </div>
 
         <div style={{ display: 'flex', gap: '8px' }}>
