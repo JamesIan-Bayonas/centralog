@@ -70,3 +70,14 @@ Desktop.ini
 # (e.g., if publish settings are created dynamically or vary per developer)
 CentraLog.API/Properties/PublishProfiles/
 repomix-output.xml
+
+# Avoid committing local user settings
+*.csproj.user
+
+# Avoid committing publishing/deployment secrets
+*.pubxml
+
+*PublishProfiles/
+
+CentraLog.API.csproj.user
+site78120-WebDeploy.pubxml
