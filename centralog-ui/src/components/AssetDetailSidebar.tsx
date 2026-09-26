@@ -1,9 +1,10 @@
 // centralog-ui/src/components/AssetDetailSidebar.tsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { assetApi, type Asset, type AssetHistoryDto, DepreciationMethodMap, LifecycleStateMap } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { X, ShieldAlert, TrendingDown, Calendar, HardDrive, Settings, Trash2, History, Maximize2 } from 'lucide-react';
+import './AssetDetailSidebar.css';
 
 interface AssetDetailSidebarProps {
   asset: Asset | null;
@@ -30,6 +31,15 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
   const [historyTimeline, setHistoryTimeline] = useState<AssetHistoryDto | null>(null);
   const [isTimelineLoading, setIsTimelineLoading] = useState<boolean>(false);
   const [timelineError, setTimelineError] = useState<string | null>(null);
+  const drawerRef = useRef<HTMLElement>(null);
+  const inspectedAssetId = asset?.id;
+
+  useEffect(() => {
+    if (inspectedAssetId == null) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    drawerRef.current?.focus();
+    return () => { if (previousFocus?.isConnected) previousFocus.focus(); };
+  }, [inspectedAssetId]);
 
   useEffect(() => {
     if (!asset) {
@@ -88,26 +98,48 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
   };
 
   return (
-    <div style={{ position: 'fixed', top: 0, right: 0, width: '460px', height: '100vh', background: 'var(--surface)', borderLeft: '1px solid var(--border)', boxShadow: '-10px 0 25px rgba(0,0,0,0.3)', zIndex: 500, display: 'flex', flexDirection: 'column' }}>
+    <div className="asset-drawer-backdrop">
+    <aside
+      ref={drawerRef}
+      tabIndex={-1}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="asset-drawer-title"
+      className="asset-drawer"
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') onClose();
+        if (event.key !== 'Tab') return;
+        const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled])'));
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (event.shiftKey && (document.activeElement === first || document.activeElement === event.currentTarget)) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      }}
+    >
       
       {/* Header Context */}
-      <div style={{ padding: '24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="asset-drawer-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <HardDrive size={20} style={{ color: 'var(--accent)' }} />
-          <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>Asset Ledger Audit</h3>
+          <h2 id="asset-drawer-title">Asset details</h2>
         </div>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+        <button type="button" onClick={onClose} className="asset-drawer-close" aria-label="Close asset details">
           <X size={20} />
         </button>
       </div>
 
       {/* High Density Scrollable Data Deck */}
-      <div style={{ padding: '24px', flexGrow: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <div className="asset-drawer-content">
         
         {/* Core Profile */}
         <div>
-          <span style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '1px' }}>Hardware Descriptor</span>
-          <h2 style={{ margin: '4px 0 8px 0', fontSize: '22px', fontWeight: 700 }}>{asset.name}</h2>
+          <span style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '1px' }}>Asset</span>
+          <h3 className="asset-drawer-name">{asset.name}</h3>
           <div style={{ display: 'inline-block', padding: '4px 10px', borderRadius: '4px', background: 'var(--surface-raised)', border: `1px solid ${stateMeta.color}`, color: stateMeta.color, fontSize: '12px', fontWeight: 600 }}>
             {stateMeta.label}
           </div>
@@ -156,7 +188,7 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
           <h4 style={{ margin: '0 0 12px 0', fontSize: '13px', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Calendar size={14} /> Operational Environment Mapping
           </h4>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13px' }}>
+          <div className="asset-drawer-facts">
             <div style={{ background: 'var(--surface-raised)', padding: '12px', borderRadius: '6px', border: '1px solid var(--border)' }}>
               <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginBottom: '4px' }}>ROOM ALLOCATION KEY</div>
               <span className="mono" style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Room #{asset.roomId}</span>
@@ -220,8 +252,9 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
             </h4>
             <form onSubmit={handleDecommissionSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Scrap Recovery Value (₱)</label>
+                <label htmlFor="asset-scrap-value" style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Scrap recovery value (₱)</label>
                 <input 
+                  id="asset-scrap-value"
                   type="number" 
                   min="0"
                   value={scrapValue} 
@@ -230,8 +263,9 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Auditable Disposal Justification</label>
+                <label htmlFor="asset-disposal-reason" style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Disposal reason</label>
                 <input 
+                  id="asset-disposal-reason"
                   type="text" 
                   required
                   placeholder="e.g., Hardware obsolescence..."
@@ -255,7 +289,7 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
       
       {/* Contextual Action Execution Drawer */}
       {hasClearance(['Inventory Staff', 'Manager', 'SystemAdmin', 'InventoryStaff', 'Accountant']) && (
-        <div style={{ padding: '24px', borderTop: '1px solid var(--border)', background: 'var(--surface-raised)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div className="asset-drawer-actions">
           <h4 style={{ margin: 0, fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Settings size={12} /> {user?.roleName === 'Accountant' ? 'Audit Navigation Hub' : 'Sequential Lifecycle Phase Advance'}
           </h4>
@@ -263,7 +297,7 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
           <button 
             onClick={() => onOpenOverview(asset.id)}
             className="action-button primary" 
-            style={{ width: '100%', padding: '12px', justifyContent: 'center', fontWeight: 600, backgroundColor: 'var(--accent)', border: 'none', color: '#fff', borderRadius: '4px', marginBottom: '8px', cursor: 'pointer' }}
+            style={{ width: '100%', padding: '12px', justifyContent: 'center', fontWeight: 600, backgroundColor: 'var(--accent)', border: 'none', color: 'var(--accent-contrast)', borderRadius: '4px', marginBottom: '8px', cursor: 'pointer' }}
           >
             <Maximize2 size={16} style={{ marginRight: '8px' }}/> Inspect Full Property Dashboard
           </button>
@@ -315,6 +349,7 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
         </div>
       )}
 
+    </aside>
     </div>
   );
 };
