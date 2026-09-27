@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { assetApiEnriched, type Asset } from '../services/api';
 import { Printer, Tag, Trash2, X, RefreshCw, QrCode } from 'lucide-react';
+import './StickerQueueModal.css';
 
 interface StickerQueueModalProps {
   isOpen: boolean;
@@ -16,6 +17,14 @@ export const StickerQueueModal: React.FC<StickerQueueModalProps> = ({
   const [queuedAssets, setQueuedAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dialogRef.current?.focus();
+    return () => { if (previousFocus?.isConnected) previousFocus.focus(); };
+  }, [isOpen]);
 
   const fetchQueue = async () => {
     setLoading(true);
@@ -53,134 +62,124 @@ export const StickerQueueModal: React.FC<StickerQueueModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="loader-overlay" style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 1100, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }}>
-      <style>{`
-        @media print {
-          body * {
-            visibility: hidden !important;
+    <div className="sticker-overlay">
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="sticker-queue-title"
+        aria-describedby="sticker-queue-description"
+        className="sticker-dialog"
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') onClose();
+          if (event.key !== 'Tab') return;
+          const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled])'));
+          const first = controls[0];
+          const last = controls[controls.length - 1];
+          if (event.shiftKey && (document.activeElement === first || document.activeElement === event.currentTarget)) {
+            event.preventDefault();
+            last?.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first?.focus();
           }
-          .printable-sticker-sheet, .printable-sticker-sheet * {
-            visibility: visible !important;
-          }
-          .printable-sticker-sheet {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
-            background: #ffffff !important;
-            color: #000000 !important;
-            padding: 0 !important;
-            margin: 0 !important;
-          }
-          .no-print-modal {
-            display: none !important;
-          }
-          .sticker-grid {
-            display: grid !important;
-            grid-template-columns: repeat(2, 1fr) !important;
-            gap: 12px !important;
-          }
-          .sticker-card {
-            border: 2px solid #000000 !important;
-            background: #ffffff !important;
-            color: #000000 !important;
-            page-break-inside: avoid !important;
-          }
-        }
-      `}</style>
-
-      <div style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', width: '100%', maxWidth: '820px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 30px rgba(0,0,0,0.5)' }}>
+        }}
+      >
         
         {/* Header - Non-Printable */}
-        <div className="no-print-modal" style={{ padding: '20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--surface-raised)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Tag size={20} style={{ color: 'var(--accent)' }} />
+        <div className="no-print-modal sticker-dialog-header">
+          <div className="sticker-dialog-heading">
+            <span className="sticker-dialog-icon"><Tag size={20} aria-hidden="true" /></span>
             <div>
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>Batch Property Sticker Queue</h3>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Queued Items: <strong>{queuedAssets.length}</strong> property tags ready for print layout generation</span>
+              <p className="sticker-dialog-eyebrow">PRINT PREVIEW</p>
+              <h2 id="sticker-queue-title">Property sticker queue</h2>
+              <p id="sticker-queue-description">{loading ? 'Loading sticker queue…' : `${queuedAssets.length} ${queuedAssets.length === 1 ? 'asset' : 'assets'} ready for a sticker sheet`}</p>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <div className="sticker-dialog-controls">
             <button 
+              type="button"
               onClick={handleTriggerPrint} 
-              disabled={queuedAssets.length === 0}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'var(--clr-success)', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '6px', fontWeight: 600, cursor: queuedAssets.length === 0 ? 'not-allowed' : 'pointer', opacity: queuedAssets.length === 0 ? 0.5 : 1 }}
+              disabled={loading || queuedAssets.length === 0}
+              className="sticker-print-button"
             >
-              <Printer size={16} /> Print Tag Sheet
+              <Printer size={17} aria-hidden="true" /> Print sticker sheet
             </button>
-            <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px' }}>
-              <X size={20} />
+            <button type="button" onClick={onClose} className="sticker-close-button" aria-label="Close sticker queue">
+              <X size={20} aria-hidden="true" />
             </button>
           </div>
         </div>
 
         {/* Feedback Banner */}
         {actionFeedback && (
-          <div className="no-print-modal" style={{ padding: '10px 20px', backgroundColor: 'rgba(56, 189, 248, 0.1)', borderBottom: '1px solid var(--border)', color: 'var(--accent)', fontSize: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="no-print-modal sticker-feedback" role="status">
             <span>{actionFeedback}</span>
-            <button onClick={() => setActionFeedback(null)} style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
+            <button type="button" onClick={() => setActionFeedback(null)} aria-label="Dismiss queue notification"><X size={17} aria-hidden="true" /></button>
           </div>
         )}
 
         {/* Scrollable Tag Deck */}
-        <div className="printable-sticker-sheet" style={{ padding: '24px', overflowY: 'auto', flexGrow: 1 }}>
+        <div className="printable-sticker-sheet">
           {loading ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
-              <RefreshCw size={24} className="spin" style={{ marginBottom: '8px' }} />
-              <div>Fetching queued property tags...</div>
+            <div className="sticker-empty" role="status">
+              <RefreshCw size={24} className="spin" aria-hidden="true" />
+              <div>Loading queued stickers…</div>
             </div>
           ) : queuedAssets.length === 0 ? (
-            <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
-              <Tag size={40} style={{ opacity: 0.4, marginBottom: '12px' }} />
-              <h4 style={{ margin: '0 0 6px 0', color: 'var(--text-primary)' }}>Sticker Queue Empty</h4>
-              <p style={{ margin: 0, fontSize: '13px' }}>Click "Add To My Sticker Queue" on any property card or overview panel to queue tags here.</p>
+            <div className="sticker-empty">
+              <Tag size={36} aria-hidden="true" />
+              <h3>No stickers queued</h3>
+              <p>Open a property and add it to your sticker queue to preview tags here.</p>
             </div>
           ) : (
-            <div className="sticker-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+            <div className="sticker-grid">
               {queuedAssets.map((asset) => {
                 const propertyCode = asset.propertyNumber || `SPHV-2026-02-${String(asset.id).padStart(4, '0')}`;
                 const serialNum = asset.serialNumber || 'KW16TSDTD2026124-80008';
                 
                 return (
-                  <div key={asset.id} className="sticker-card" style={{ border: '2px solid var(--border)', borderRadius: '8px', padding: '16px', backgroundColor: 'var(--surface-raised)', display: 'flex', flexDirection: 'column', gap: '12px', position: 'relative' }}>
+                  <article key={asset.id} className="sticker-card">
                     
                     {/* Top Row: Institution Header & Remove Action */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px dashed var(--border)', paddingBottom: '8px' }}>
+                    <div className="sticker-card-header">
                       <div>
-                        <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: 'var(--accent)' }}>PROPERTY OF DENR / PENRO</div>
-                        <div style={{ fontSize: '14px', fontWeight: 700, fontFamily: 'monospace' }}>{propertyCode}</div>
+                        <p className="sticker-owner">PROPERTY OF DENR / PENRO</p>
+                        <strong className="sticker-code mono">{propertyCode}</strong>
                       </div>
                       <button 
+                        type="button"
                         onClick={() => handleRemoveFromQueue(asset.id)}
-                        className="no-print-modal"
+                        className="no-print-modal sticker-remove-button"
+                        aria-label={`Remove ${asset.name} from sticker queue`}
                         title="Remove from print queue"
-                        style={{ background: 'none', border: 'none', color: 'var(--clr-danger)', cursor: 'pointer', padding: '2px' }}
                       >
-                        <Trash2 size={16} />
+                        <Trash2 size={17} aria-hidden="true" />
                       </button>
                     </div>
 
                     {/* Middle Row: QR Code & Asset Descriptor */}
-                    <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
-                      <div style={{ padding: '8px', background: '#ffffff', borderRadius: '6px', border: '1px solid #d1d5db', display: 'flex', justifyContent: 'center', alignItems: 'center', width: '64px', height: '64px', flexShrink: 0 }}>
+                    <div className="sticker-card-body">
+                      <div className="sticker-qr-symbol" aria-hidden="true">
                         <QrCode size={52} color="#000000" />
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', overflow: 'hidden' }}>
-                        <div style={{ fontWeight: 700, fontSize: '13px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{asset.name}</div>
-                        <div><span style={{ color: 'var(--text-muted)' }}>SERIAL:</span> <strong className="mono">{serialNum}</strong></div>
-                        <div><span style={{ color: 'var(--text-muted)' }}>ACCOUNT:</span> <strong>{asset.accountCategory || asset.categoryTag}</strong></div>
-                        <div><span style={{ color: 'var(--text-muted)' }}>VALUE:</span> <strong className="mono">₱{asset.procurementCost.toLocaleString()}</strong></div>
+                      <div className="sticker-card-details">
+                        <strong className="sticker-asset-name">{asset.name}</strong>
+                        <div><span>SERIAL:</span> <strong className="mono">{serialNum}</strong></div>
+                        <div><span>ACCOUNT:</span> <strong>{asset.accountCategory || asset.categoryTag}</strong></div>
+                        <div><span>VALUE:</span> <strong className="mono">₱{asset.procurementCost.toLocaleString()}</strong></div>
                       </div>
                     </div>
 
                     {/* Bottom Row: Footer Placement Keys */}
-                    <div style={{ borderTop: '1px dashed var(--border)', paddingTop: '6px', display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-muted)' }}>
+                    <div className="sticker-card-footer">
                       <span>ROOM: #{asset.roomId}</span>
                       <span>CUSTODIAN: #{asset.custodianId}</span>
                       <span>ACQUIRED: {new Date(asset.acquisitionDate || asset.createdAt).toLocaleDateString()}</span>
                     </div>
 
-                  </div>
+                  </article>
                 );
               })}
             </div>
@@ -188,9 +187,9 @@ export const StickerQueueModal: React.FC<StickerQueueModalProps> = ({
         </div>
 
         {/* Footer Navigation - Non-Printable */}
-        <div className="no-print-modal" style={{ padding: '16px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', backgroundColor: 'var(--surface-raised)' }}>
-          <button onClick={onClose} style={{ padding: '8px 20px', background: 'none', border: '1px solid var(--border)', color: 'var(--text-primary)', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}>
-            Close Queue Window
+        <div className="no-print-modal sticker-dialog-footer">
+          <button type="button" onClick={onClose} className="sticker-footer-close">
+            Close queue
           </button>
         </div>
 

@@ -1,0 +1,150 @@
+.sticker-overlay {
+  position: fixed;
+  z-index: 1100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(4, 15, 10, 0.76);
+}
+.sticker-dialog {
+  box-sizing: border-box;
+  width: min(100%, 860px);
+  max-height: calc(100dvh - 32px);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text-primary);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.25);
+}
+.sticker-dialog:focus { outline: none; }
+.sticker-dialog-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+.sticker-dialog-heading { min-width: 0; display: flex; align-items: flex-start; gap: 12px; }
+.sticker-dialog-icon {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--accent);
+}
+.sticker-dialog-eyebrow { margin: 0 0 4px; color: var(--accent); font-size: 10px; font-weight: 800; letter-spacing: 0.12em; }
+.sticker-dialog-heading h2 { margin: 0; font-size: clamp(17px, 2vw, 20px); line-height: 1.25; }
+.sticker-dialog-heading p:last-child { margin: 5px 0 0; color: var(--text-muted); font-size: 12px; line-height: 1.4; }
+.sticker-dialog-controls { flex: none; display: flex; align-items: center; gap: 9px; }
+.sticker-print-button,
+.sticker-footer-close {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.sticker-print-button { border-color: var(--accent); background: var(--accent); color: var(--accent-contrast); }
+.sticker-print-button:disabled { opacity: 0.55; cursor: not-allowed; }
+.sticker-close-button,
+.sticker-feedback button,
+.sticker-remove-button {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.sticker-close-button:hover,
+.sticker-feedback button:hover,
+.sticker-remove-button:hover { background: var(--row-hover); color: var(--text-primary); }
+.sticker-feedback { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 18px; border-bottom: 1px solid var(--border); color: var(--text-primary); font-size: 12px; }
+.printable-sticker-sheet { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: clamp(16px, 2.6vw, 24px); }
+.sticker-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 230px; padding: 24px; color: var(--text-muted); text-align: center; }
+.sticker-empty svg { color: var(--accent); opacity: 0.7; }
+.sticker-empty h3 { margin: 0; color: var(--text-primary); font-size: 17px; }
+.sticker-empty p { max-width: 360px; margin: 0; font-size: 13px; line-height: 1.5; }
+.sticker-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.sticker-card {
+  box-sizing: border-box;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-raised);
+  break-inside: avoid;
+}
+.sticker-card-header { min-width: 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding-bottom: 9px; border-bottom: 1px dashed var(--border); }
+.sticker-card-header > div { min-width: 0; }
+.sticker-owner { margin: 0 0 4px; color: var(--accent); font-size: 10px; font-weight: 800; letter-spacing: 0.08em; }
+.sticker-code { display: block; color: var(--text-primary); font-size: 13px; overflow-wrap: anywhere; }
+.sticker-remove-button { width: 44px; height: 44px; color: var(--clr-danger); }
+.sticker-card-body { min-width: 0; display: flex; align-items: center; gap: 14px; }
+.sticker-qr-symbol { box-sizing: border-box; flex: none; width: 74px; height: 74px; display: grid; place-items: center; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; }
+.sticker-card-details { min-width: 0; display: flex; flex-direction: column; gap: 4px; font-size: 11px; line-height: 1.35; overflow-wrap: anywhere; }
+.sticker-card-details span { color: var(--text-muted); }
+.sticker-asset-name { display: block; color: var(--text-primary); font-size: 13px; line-height: 1.3; }
+.sticker-card-footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 5px 12px; padding-top: 9px; border-top: 1px dashed var(--border); color: var(--text-muted); font-size: 10px; line-height: 1.35; }
+.sticker-dialog-footer { flex: none; display: flex; justify-content: flex-end; padding: 12px 22px max(12px, env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: var(--surface-raised); }
+.sticker-dialog :is(button):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+@media (max-width: 700px) {
+  .sticker-dialog-header { align-items: flex-start; flex-direction: column; padding: 16px; }
+  .sticker-dialog-controls { width: 100%; }
+  .sticker-print-button { flex: 1; }
+  .sticker-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 420px) {
+  .sticker-overlay { padding: 0; }
+  .sticker-dialog { width: 100%; height: 100dvh; max-height: none; border: 0; border-radius: 0; }
+  .sticker-dialog-icon { display: none; }
+  .sticker-dialog-footer { padding: 10px 16px max(10px, env(safe-area-inset-bottom)); }
+  .sticker-footer-close { width: 100%; }
+}
+@media print {
+  body * { visibility: hidden !important; }
+  .printable-sticker-sheet,
+  .printable-sticker-sheet * { visibility: visible !important; }
+  .sticker-overlay,
+  .sticker-dialog,
+  .printable-sticker-sheet { position: static !important; display: block !important; width: 100% !important; height: auto !important; max-width: none !important; max-height: none !important; overflow: visible !important; padding: 0 !important; margin: 0 !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; background: #fff !important; }
+  .sticker-overlay { position: absolute !important; top: 0 !important; left: 0 !important; }
+  .no-print-modal,
+  .sticker-empty { display: none !important; }
+  .sticker-grid { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10mm !important; }
+  .sticker-card { break-inside: avoid !important; page-break-inside: avoid !important; padding: 4mm !important; border: 1.5pt solid #000 !important; border-radius: 0 !important; background: #fff !important; color: #000 !important; }
+  .sticker-card-header,
+  .sticker-card-footer { border-color: #000 !important; }
+  .sticker-card :is(p, strong, span, div) { color: #000 !important; }
+  .sticker-card-details { font-size: 9pt !important; }
+  .sticker-asset-name { font-size: 10pt !important; }
+  .sticker-card-footer { font-size: 8pt !important; }
+}
