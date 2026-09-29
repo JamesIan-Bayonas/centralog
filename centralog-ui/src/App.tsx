@@ -1,10 +1,10 @@
 // centralog-ui/src/App.tsx
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api, assetApiEnriched, type Asset, type DashboardSummary, type PagedResult } from './services/api';
 import { useAuth } from './context/AuthContext';
 import { LoginPortal } from './components/LoginPortal'; 
-import { Search, ShieldAlert, CheckCircle, RotateCw, Server, Package, Trash2, Layers, MapPin, Hash, DollarSign, ArrowLeftRight, Wrench, LogOut, UserCheck, Upload, Image as ImageIcon, X, RotateCcw, Tag, ClipboardList } from 'lucide-react';
+import { Search, ShieldAlert, CheckCircle, RotateCw, PackageCheck, Package, Trash2, Layers, MapPin, Hash, DollarSign, ArrowLeftRight, Wrench, LogOut, UserCheck, Upload, Image as ImageIcon, X, RotateCcw, Tag, ClipboardList, Menu, LayoutDashboard, Sun, Moon, Leaf } from 'lucide-react';
 import './App.css';
 import { AssetDetailSidebar } from './components/AssetDetailSidebar';
 import { FinancialLedgerReport } from './components/FinancialLedgerReport';
@@ -34,10 +34,20 @@ function App() {
 
   const [selectedAssetIds, setSelectedAssetIds] = useState<number[]>([]);
   const [showTransferModal, setShowTransferModal] = useState(false);
+  const transferDialogRef = useRef<HTMLFormElement>(null);
+  const transferTriggerRef = useRef<HTMLButtonElement>(null);
+  const workspaceMainRef = useRef<HTMLElement>(null);
   const [destinationRoom, setDestinationRoom] = useState<number>(101);
   const [newCustodian, setNewCustodian] = useState<number>(1);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
   const [activeInspectedAsset, setActiveInspectedAsset] = useState<Asset | null>(null);
+
+  useEffect(() => {
+    if (!showTransferModal) return;
+    const trigger = transferTriggerRef.current;
+    transferDialogRef.current?.focus();
+    return () => trigger?.focus();
+  }, [showTransferModal]);
 
   // STICKER QUEUE & MEDIA UPLOADER STATES
   const [showStickerQueueModal, setShowStickerQueueModal] = useState<boolean>(false);
@@ -46,6 +56,17 @@ function App() {
 
   // VIEW TOGGLE STATE (Accountants default to ledger view; others default to operational dashboard)
   const [accountantTab, setAccountantTab] = useState<'ledger' | 'dashboard' | 'audit'>('dashboard');
+  const [isMobileNavigationOpen, setIsMobileNavigationOpen] = useState(false);
+  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const closeMobileNavigation = () => {
+    setIsMobileNavigationOpen(false);
+    if (window.matchMedia('(max-width: 1180px)').matches) mobileMenuButtonRef.current?.focus();
+  };
+  const showWorkspaceView = (view: 'ledger' | 'dashboard' | 'audit') => {
+    setAccountantTab(view);
+    closeMobileNavigation();
+    requestAnimationFrame(() => workspaceMainRef.current?.focus());
+  };
 
   useEffect(() => {
     if (user?.roleName === 'Accountant') {
@@ -263,127 +284,191 @@ function App() {
 
   return (
     <div className={`app-viewport ${currentTheme} app-workspace`}>
+      <a className="workspace-skip-link" href="#workspace-content">Skip to main content</a>
       <header className="workspace-header">
-        <div className="logo-section">
-          <div className="icon-frame"><Server size={22} /></div>
-          <div>
-            <h1>CentraLog</h1>
-            <span className="subtitle">Enterprise Resource Ledger • Connected Mode</span>
+        <div className="workspace-header-top">
+          <div className="logo-section">
+            <div className="icon-frame"><PackageCheck size={23} aria-hidden="true" /></div>
+            <div>
+              <p className="workspace-brand-name">CentraLog<span>.</span></p>
+              <span className="subtitle">DMCCFI asset management</span>
+            </div>
           </div>
+          <button
+            type="button"
+            ref={mobileMenuButtonRef}
+            className="workspace-menu-toggle"
+            aria-label={isMobileNavigationOpen ? 'Close navigation' : 'Open navigation'}
+            aria-expanded={isMobileNavigationOpen}
+            aria-controls="workspace-navigation"
+            onClick={() => setIsMobileNavigationOpen(open => !open)}
+            onKeyDown={(event) => { if (event.key === 'Escape' && isMobileNavigationOpen) closeMobileNavigation(); }}
+          >
+            {isMobileNavigationOpen ? <X size={20} aria-hidden="true" /> : <Menu size={20} aria-hidden="true" />}
+            <span>{isMobileNavigationOpen ? 'Close' : 'Menu'}</span>
+          </button>
         </div>
 
-        {user && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', background: 'var(--surface-raised)', padding: '6px 14px', borderRadius: '6px', border: '1px solid var(--border)' }}>
-            <UserCheck size={14} className="text-success" />
-            <span className="mono">{user.username} <span style={{ color: 'var(--text-muted)' }}>({user.roleName})</span></span>
-          </div>
-        )}
-
-        <div className="theme-trigger-deck" style={{ display: 'flex', gap: '8px', marginLeft: 'auto', marginRight: '16px' }}>
-          <button onClick={() => selectTheme('theme-obsidian')} className={`action-button secondary ${currentTheme === 'theme-obsidian' ? 'active' : ''}`}>[OBSIDIAN]</button>
-          <button onClick={() => selectTheme('theme-light')} className={`action-button secondary ${currentTheme === 'theme-light' ? 'active' : ''}`}>[LIGHT]</button>
-          <button onClick={() => selectTheme('theme-dmc')} className={`action-button secondary ${currentTheme === 'theme-dmc' ? 'active' : ''}`}>[DMC MODE]</button>
-        </div>
-
-        <div style={{ display: 'flex', gap: '8px' }}>
-          {hasClearance(['Accountant', 'SystemAdmin']) && (
-            <button 
-              onClick={() => setAccountantTab(prev => prev === 'ledger' ? 'dashboard' : 'ledger')} 
-              className={`action-button ${accountantTab === 'ledger' ? 'primary' : 'secondary'}`}
-              title="Toggle Financial Depreciation Ledger View"
-            >
-              <DollarSign size={14} /> {accountantTab === 'ledger' ? (user?.roleName === 'Accountant' ? 'Directory Explorer' : 'Operational View') : 'Financial Ledger'}
-            </button>
-          )}
-          {hasClearance(['Accountant', 'SystemAdmin']) && (
+        <div
+          id="workspace-navigation"
+          className={`workspace-navigation ${isMobileNavigationOpen ? 'is-open' : ''}`}
+          onKeyDown={(event) => { if (event.key === 'Escape') closeMobileNavigation(); }}
+        >
+          <nav className="workspace-primary-nav" aria-label="Workspace views">
             <button
-              onClick={() => setAccountantTab(prev => prev === 'audit' ? 'dashboard' : 'audit')}
-              className={`action-button ${accountantTab === 'audit' ? 'primary' : 'secondary'}`}
-              title="View read-only asset accountability history"
+              type="button"
+              onClick={() => showWorkspaceView('dashboard')}
+              className={`workspace-nav-button ${accountantTab === 'dashboard' ? 'is-active' : ''}`}
+              aria-current={accountantTab === 'dashboard' ? 'page' : undefined}
             >
-              <ClipboardList size={14} /> {accountantTab === 'audit' ? 'Operational View' : 'Audit Log'}
+              <LayoutDashboard size={17} aria-hidden="true" /> Overview
             </button>
-          )}
-          <button onClick={() => setShowStickerQueueModal(true)} className="action-button secondary" title="Open Batch Sticker Print Queue">
-            <Tag size={14} /> Sticker Queue
-          </button>
-          <button onClick={() => { loadDashboardMetrics(); loadAssetsList(searchTerm); loadProcurementSuggestions(); }} className="action-button secondary">
-            <RotateCw size={14} className={loading ? "spin" : ""} /> Sync Matrix
-          </button>
-          <button onClick={logoutSession} className="action-button secondary" style={{ borderColor: 'var(--clr-danger)', color: 'var(--clr-danger)' }} title="Terminate Ledger Session">
-            <LogOut size={14} />
-          </button>
+            {hasClearance(['Accountant', 'SystemAdmin']) && (
+              <button
+                type="button"
+                onClick={() => showWorkspaceView('ledger')}
+                className={`workspace-nav-button ${accountantTab === 'ledger' ? 'is-active' : ''}`}
+                aria-current={accountantTab === 'ledger' ? 'page' : undefined}
+              >
+                <DollarSign size={17} aria-hidden="true" /> Financial ledger
+              </button>
+            )}
+            {hasClearance(['Accountant', 'SystemAdmin']) && (
+              <button
+                type="button"
+                onClick={() => showWorkspaceView('audit')}
+                className={`workspace-nav-button ${accountantTab === 'audit' ? 'is-active' : ''}`}
+                aria-current={accountantTab === 'audit' ? 'page' : undefined}
+              >
+                <ClipboardList size={17} aria-hidden="true" /> Audit log
+              </button>
+            )}
+          </nav>
+
+          <div className="workspace-utilities">
+            <button type="button" onClick={() => { setShowStickerQueueModal(true); closeMobileNavigation(); }} className="workspace-utility-button" title="Open Batch Sticker Print Queue">
+              <Tag size={17} aria-hidden="true" /> Sticker queue
+            </button>
+            <button type="button" onClick={() => { loadDashboardMetrics(); loadAssetsList(searchTerm); loadProcurementSuggestions(); closeMobileNavigation(); }} className="workspace-utility-button">
+              <RotateCw size={17} className={loading ? 'spin' : ''} aria-hidden="true" /> Refresh
+            </button>
+
+            <div className="workspace-theme-picker" role="group" aria-label="Color theme">
+              <button type="button" onClick={() => selectTheme('theme-dmc')} className={currentTheme === 'theme-dmc' ? 'is-active' : ''} aria-label="Signature green theme" aria-pressed={currentTheme === 'theme-dmc'} title="Signature green"><Leaf size={16} aria-hidden="true" /></button>
+              <button type="button" onClick={() => selectTheme('theme-light')} className={currentTheme === 'theme-light' ? 'is-active' : ''} aria-label="White theme" aria-pressed={currentTheme === 'theme-light'} title="White"><Sun size={16} aria-hidden="true" /></button>
+              <button type="button" onClick={() => selectTheme('theme-obsidian')} className={currentTheme === 'theme-obsidian' ? 'is-active' : ''} aria-label="Night theme" aria-pressed={currentTheme === 'theme-obsidian'} title="Night"><Moon size={16} aria-hidden="true" /></button>
+            </div>
+
+            {user && (
+              <div className="workspace-user" title={`${user.username} · ${user.roleName}`}>
+                <UserCheck size={17} aria-hidden="true" />
+                <span><strong>{user.username}</strong><small>{user.roleName}</small></span>
+              </div>
+            )}
+            <button type="button" onClick={logoutSession} className="workspace-signout" title="Sign out of CentraLog">
+              <LogOut size={17} aria-hidden="true" /><span>Sign out</span>
+            </button>
+          </div>
         </div>
       </header>
 
+      <main id="workspace-content" ref={workspaceMainRef} className="workspace-main" tabIndex={-1} aria-label={`${accountantTab === 'dashboard' ? 'Overview' : accountantTab === 'ledger' ? 'Financial ledger' : 'Audit log'} content`}>
+      {accountantTab !== 'dashboard' && (
+        <h1 className="workspace-view-title">{accountantTab === 'ledger' ? 'Financial ledger' : 'Audit log'}</h1>
+      )}
       {actionFeedback && (
-        <div className="status-badge status-warning" style={{ width: '100%', boxSizing: 'border-box', marginBottom: '20px', padding: '12px' }}>
-          {actionFeedback}
-          <button onClick={() => setActionFeedback(null)} style={{ float: 'right', background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontWeight: 'bold' }}>X</button>
+        <div className="workspace-feedback" role="status">
+          <span>{actionFeedback}</span>
+          <button type="button" onClick={() => setActionFeedback(null)} aria-label="Dismiss notification"><X size={18} aria-hidden="true" /></button>
         </div>
       )}
 
       {/* RENDER TOP METRICS, FILTERS, AND PROCUREMENT FOR NON-LEDGER VIEWS */}
       {accountantTab === 'dashboard' && (
         <>
+          <section className="dashboard-intro" aria-labelledby="dashboard-title">
+            <div>
+              <p className="dashboard-eyebrow">WORKSPACE OVERVIEW</p>
+              <h1 id="dashboard-title">Asset overview</h1>
+              <p className="dashboard-description">A clear view of inventory, maintenance, and the value of school assets.</p>
+            </div>
+          </section>
           {summary && (
-            <section className="stats-container">
-              <div className="stat-card">
-                <div className="stat-info"><span className="stat-label">Total Managed Inventory</span><span className="stat-number">{summary.totalAssetCount}</span></div>
-                <div className="stat-icon-wrapper purple"><Package size={24} /></div>
+            <section className="stats-container" aria-label="Asset summary">
+              <div className="stat-card stat-card-primary">
+                <div className="stat-info"><span className="stat-label">Total assets</span><span className="stat-number">{summary.totalAssetCount.toLocaleString()}</span></div>
+                <div className="stat-icon-wrapper"><Package size={24} aria-hidden="true" /></div>
               </div>
-              <div className="stat-card">
-                <div className="stat-info"><span className="stat-label">Operational Infrastructure</span><span className="stat-number text-success">{summary.activeCount}</span></div>
-                <div className="stat-icon-wrapper green"><CheckCircle size={24} /></div>
+              <div className="stat-card stat-card-active">
+                <div className="stat-info"><span className="stat-label">Active assets</span><span className="stat-number">{summary.activeCount.toLocaleString()}</span></div>
+                <div className="stat-icon-wrapper"><CheckCircle size={24} aria-hidden="true" /></div>
               </div>
-              <div className="stat-card">
-                <div className="stat-info"><span className="stat-label">Flagged Maintenance Nodes</span><span className="stat-number text-warning">{summary.inMaintenanceCount}</span></div>
-                <div className="stat-icon-wrapper yellow"><ShieldAlert size={24} /></div>
+              <div className="stat-card stat-card-maintenance">
+                <div className="stat-info"><span className="stat-label">In maintenance</span><span className="stat-number">{summary.inMaintenanceCount.toLocaleString()}</span></div>
+                <div className="stat-icon-wrapper"><Wrench size={24} aria-hidden="true" /></div>
               </div>
-              <div className="stat-card">
-                <div className="stat-info"><span className="stat-label">Urgent Alerts</span><span className="stat-number text-danger">{summary.urgentAlertCount}</span></div>
-                <div className="stat-icon-wrapper red"><ShieldAlert size={24} /></div>
+              <div className="stat-card stat-card-alert">
+                <div className="stat-info"><span className="stat-label">Urgent alerts</span><span className="stat-number">{summary.urgentAlertCount.toLocaleString()}</span></div>
+                <div className="stat-icon-wrapper"><ShieldAlert size={24} aria-hidden="true" /></div>
               </div>
-              <div className="stat-card">
-                <div className="stat-info"><span className="stat-label">Assessed Asset Value</span><span className="stat-number text-bright">₱{summary.totalSystemValue.toLocaleString()}</span></div>
-                <div className="stat-icon-wrapper balance"><DollarSign size={24} /></div>
+              <div className="stat-card stat-card-value">
+                <div className="stat-info"><span className="stat-label">Total asset value</span><span className="stat-number">₱{summary.totalSystemValue.toLocaleString()}</span></div>
+                <div className="stat-icon-wrapper"><DollarSign size={24} aria-hidden="true" /></div>
               </div>
             </section>
           )}
 
-          {selectedAssetIds.length > 0 && user?.roleName !== 'Accountant' && (
-            <div className="filter-panel" style={{ background: 'var(--surface)', padding: '16px', borderRadius: '8px', border: '1px solid var(--accent)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <span className="mono" style={{ fontSize: '14px' }}>Selected Matrix Tokens: <strong>{selectedAssetIds.length}</strong> items chosen.</span>
-              {hasClearance(['Manager', 'SystemAdmin']) ? (
-                <button onClick={() => setShowTransferModal(true)} className="action-button primary"><ArrowLeftRight size={14} /> Authorize Bulk Transfer</button>
-              ) : (
-                <span style={{ fontSize: '12px', color: 'var(--clr-danger)' }}>Bulk adjustments locked for this profile level.</span>
-              )}
-            </div>
-          )}
-
           {showTransferModal && (
-            <div className="loader-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-              <form onSubmit={handleBulkTransferSubmit} style={{ background: 'var(--surface)', padding: '30px', borderRadius: '12px', border: '1px solid var(--border)', width: '400px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <h3 style={{ margin: 0 }}>Execute Grouped Relocation</h3>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '12px' }}>Destination Room ID Code</label>
-                  <select value={destinationRoom} onChange={(e) => setDestinationRoom(Number(e.target.value))} style={{ width: '100%', padding: '10px', background: 'var(--canvas)', color: 'var(--text-primary)', borderRadius: '6px', border: '1px solid var(--border)' }}>
+            <div className="transfer-overlay">
+              <form
+                ref={transferDialogRef}
+                tabIndex={-1}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="transfer-title"
+                aria-describedby="transfer-description"
+                className="transfer-dialog"
+                onSubmit={handleBulkTransferSubmit}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') setShowTransferModal(false);
+                  if (event.key !== 'Tab') return;
+                  const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('select, button:not([disabled])'));
+                  const first = controls[0];
+                  const last = controls[controls.length - 1];
+                  if (event.shiftKey && (document.activeElement === first || document.activeElement === event.currentTarget)) {
+                    event.preventDefault();
+                    last?.focus();
+                  } else if (!event.shiftKey && document.activeElement === last) {
+                    event.preventDefault();
+                    first?.focus();
+                  }
+                }}
+              >
+                <div className="transfer-dialog-heading">
+                  <div className="transfer-dialog-icon"><ArrowLeftRight size={21} aria-hidden="true" /></div>
+                  <div>
+                    <h2 id="transfer-title">Transfer selected assets</h2>
+                    <p id="transfer-description">Move {selectedAssetIds.length} selected {selectedAssetIds.length === 1 ? 'asset' : 'assets'} to a new room and custodian.</p>
+                  </div>
+                </div>
+                <div className="transfer-field">
+                  <label htmlFor="transfer-room">Destination room</label>
+                  <select id="transfer-room" value={destinationRoom} onChange={(e) => setDestinationRoom(Number(e.target.value))}>
                     <option value={101}>Room 101 (Admin Office)</option>
                     <option value={202}>Room 202 (Server Room)</option>
                     <option value={303}>Room 303 (Laboratory)</option>
                   </select>
                 </div>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '12px' }}>New Custodian ID Assignment</label>
-                  <select value={newCustodian} onChange={(e) => setNewCustodian(Number(e.target.value))} style={{ width: '100%', padding: '10px', background: 'var(--canvas)', color: 'var(--text-primary)', borderRadius: '6px', border: '1px solid var(--border)' }}>
+                <div className="transfer-field">
+                  <label htmlFor="transfer-custodian">New custodian</label>
+                  <select id="transfer-custodian" value={newCustodian} onChange={(e) => setNewCustodian(Number(e.target.value))}>
                     <option value={1}>Custodian #1 (Systems Lead)</option>
                     <option value={2}>Custodian #2 (Network Admin)</option>
                   </select>
                 </div>
-                <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                  <button type="submit" className="action-button primary" style={{ flex: 1 }}>Commit Batch Transaction</button>
+                <div className="transfer-dialog-actions">
                   <button type="button" onClick={() => setShowTransferModal(false)} className="action-button secondary">Cancel</button>
+                  <button type="submit" className="action-button primary">Transfer assets</button>
                 </div>
               </form>
             </div>
@@ -393,19 +478,23 @@ function App() {
           {hasClearance(['Manager', 'SystemAdmin', 'Accountant']) && (
             <section className="report-controls-deck">
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600 }}>Compliance Export Controls</h3>
-                <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Generate legally binding balance sheets and unmodifiable asset tracking summaries.</p>
+                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600 }}>Inventory print</h3>
+                <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Print the current inventory view for review and filing.</p>
               </div>
-              <button onClick={triggerCompliancePrint} className="action-button primary" style={{ marginLeft: 'auto', backgroundColor: 'var(--clr-success)' }}>Export Tabular Report Ledger</button>
+              <button onClick={triggerCompliancePrint} className="action-button primary" style={{ backgroundColor: 'var(--clr-success)' }}>Print inventory report</button>
             </section>
           )}
 
           {/* ISSUE #3 FIX: Exclusively restricted to Manager and SystemAdmin tiers */}
           {hasClearance(['Manager', 'SystemAdmin']) && (
-            <section className="filter-panel" style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border)', marginBottom: '24px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', borderBottom: '1px solid var(--border)', paddingBottom: '10px' }}>
-                <Package size={18} className="text-bright" />
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>Log New Procurement Asset Entry</h3>
+            <section className="procurement-panel" aria-labelledby="procurement-title">
+              <div className="procurement-header">
+                <div className="procurement-header-icon"><Package size={22} aria-hidden="true" /></div>
+                <div>
+                  <p className="section-eyebrow">PROCUREMENT</p>
+                  <h2 id="procurement-title">Register a new asset</h2>
+                  <p className="section-description">Add its core details, location, and custodian to the inventory.</p>
+                </div>
               </div>
               
               <form onSubmit={async (e) => {
@@ -450,12 +539,12 @@ function App() {
                 } catch (err: any) {
                   setActionFeedback(`Registration Failure: ${err.message || 'Validation error.'}`);
                 }
-              }} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px', alignItems: 'end' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase' }}>
-                    Hardware Name
-                  </label>
+              }} className="procurement-form">
+                <div className="procurement-fields">
+                <div className="procurement-field">
+                  <label htmlFor="procurement-name">Asset name <span aria-hidden="true">*</span></label>
                   <input 
+                    id="procurement-name"
                     type="text" 
                     name="assetName" 
                     required 
@@ -463,7 +552,6 @@ function App() {
                     value={nameInputValue}
                     onChange={(e) => handleNameInputChange(e.target.value)}
                     placeholder="e.g., Lenovo Legion R7" 
-                    style={{ width: '100%', boxSizing: 'border-box', padding: '10px', backgroundColor: 'var(--canvas)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: '4px', outline: 'none' }} 
                   />
                   <datalist id="hardware-name-history-list">
                     {hardwareNameSuggestions.map((suggestion, idx) => (
@@ -472,18 +560,16 @@ function App() {
                   </datalist>
                 </div>
 
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase' }}>
-                    Classification Category
-                  </label>
+                <div className="procurement-field">
+                  <label htmlFor="procurement-category">Category <span aria-hidden="true">*</span></label>
                   <input 
+                    id="procurement-category"
                     type="text" 
                     required
                     list="classification-category-list"
                     value={selectedCategory} 
                     onChange={(e) => setSelectedCategory(e.target.value)}
-                    placeholder="Select or type custom category..."
-                    style={{ width: '100%', boxSizing: 'border-box', padding: '10px', backgroundColor: 'var(--canvas)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: '4px', outline: 'none', height: '38px' }}
+                    placeholder="Select or type a category"
                   />
                   <datalist id="classification-category-list">
                     {categorySuggestions.map((cat, idx) => (
@@ -493,9 +579,10 @@ function App() {
                 </div>
 
                 {/* ISSUE #2 FIX: Form input capped with min, max, and step boundaries */}
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase' }}>Procurement Cost (₱)</label>
+                <div className="procurement-field">
+                  <label htmlFor="procurement-cost">Procurement cost (₱) <span aria-hidden="true">*</span></label>
                   <input 
+                    id="procurement-cost"
                     type="number" 
                     name="procurementCost" 
                     required 
@@ -503,65 +590,75 @@ function App() {
                     max="100000000"
                     step="0.01"
                     placeholder="65000" 
-                    style={{ width: '100%', boxSizing: 'border-box', padding: '10px', backgroundColor: 'var(--canvas)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: '4px', outline: 'none' }} 
                   />
                 </div>
 
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase' }}>Hardware Photo File</label>
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', backgroundColor: 'var(--canvas)', border: '1px dashed var(--border)', borderRadius: '4px', padding: '6px 10px', gap: '8px' }}>
+                <div className="procurement-field">
+                  <span className="procurement-field-label">Photo <span className="optional-label">Optional</span></span>
+                  <label htmlFor="procurement-photo" className="procurement-upload">
                     <input 
+                      id="procurement-photo"
+                      className="procurement-file-input"
                       type="file" 
                       accept="image/*" 
                       onChange={handleFileUpload} 
                       disabled={isUploadingImage}
-                      style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }} 
                     />
                     {isUploadingImage ? (
-                      <RotateCw size={16} className="spin text-bright" />
+                      <RotateCw size={18} className="spin" aria-hidden="true" />
                     ) : uploadedImageUrl ? (
-                      <ImageIcon size={16} className="text-success" />
+                      <ImageIcon size={18} aria-hidden="true" />
                     ) : (
-                      <Upload size={16} style={{ color: 'var(--text-muted)' }} />
+                      <Upload size={18} aria-hidden="true" />
                     )}
-                    <span style={{ fontSize: '12px', color: uploadedImageUrl ? 'var(--clr-success)' : 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {isUploadingImage ? 'Uploading...' : uploadedImageUrl ? 'Photo Attached' : 'Choose Image File'}
-                    </span>
-                  </div>
+                    <span>{isUploadingImage ? 'Uploading photo…' : uploadedImageUrl ? 'Photo attached' : 'Choose image file'}</span>
+                  </label>
                 </div>
 
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase' }}>Physical Room Allocation</label>
-                  <select name="roomId" style={{ width: '100%', boxSizing: 'border-box', padding: '10px', backgroundColor: 'var(--canvas)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: '4px', outline: 'none', height: '38px' }}>
+                <div className="procurement-field">
+                  <label htmlFor="procurement-room">Room</label>
+                  <select id="procurement-room" name="roomId">
                     <option value="101">Room 101 (Admin Office)</option>
                     <option value="202">Room 202 (Server Room)</option>
                     <option value="303">Room 303 (Laboratory)</option>
                   </select>
                 </div>
 
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase' }}>Assigned Handler Custodian</label>
-                  <select name="custodianId" style={{ width: '100%', boxSizing: 'border-box', padding: '10px', backgroundColor: 'var(--canvas)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: '4px', outline: 'none', height: '38px' }}>
+                <div className="procurement-field">
+                  <label htmlFor="procurement-custodian">Custodian</label>
+                  <select id="procurement-custodian" name="custodianId">
                     <option value="1">Custodian #1 (Systems Lead)</option>
                     <option value="2">Custodian #2 (Network Admin)</option>
                   </select>
                 </div>
-
-                <button type="submit" className="action-button primary" style={{ height: '38px', justifyContent: 'center', width: '100%', fontWeight: 600 }}>
-                  Commit Registry Entry
-                </button>
+                </div>
+                <div className="procurement-form-footer">
+                  <span><span aria-hidden="true">*</span> Required fields</span>
+                  <button type="submit" className="action-button primary procurement-submit">
+                    <PackageCheck size={17} aria-hidden="true" /> Register asset
+                  </button>
+                </div>
               </form>
             </section>
           )}
 
           {/* ISSUE #1 FIX: Reactive search bar with Esc key, inline X button, and clear reset button */}
-          <section className="filter-panel">
+          <section className="filter-panel inventory-tools" aria-labelledby="inventory-title">
+            <div className="inventory-tools-heading">
+              <div>
+                <p className="section-eyebrow">INVENTORY</p>
+                <h2 id="inventory-title">Asset inventory</h2>
+              </div>
+              {!loading && <span className="inventory-count">{assets.length} {assets.length === 1 ? 'asset' : 'assets'} shown</span>}
+            </div>
             <form onSubmit={handleSearch} className="search-form">
-              <div className="input-group" style={{ position: 'relative', flexGrow: 1 }}>
-                <Search size={18} className="search-icon" />
+              <div className="input-group">
+                <label htmlFor="asset-search" className="visually-hidden">Search assets by name or category</label>
+                <Search size={18} className="search-icon" aria-hidden="true" />
                 <input 
+                  id="asset-search"
                   type="text" 
-                  placeholder="Search assets by hardware descriptor or category tags..." 
+                  placeholder="Search by asset name or category"
                   value={searchTerm} 
                   onChange={(e) => handleSearchInputChange(e.target.value)}
                   onKeyDown={(e) => {
@@ -569,26 +666,12 @@ function App() {
                       handleClearSearch();
                     }
                   }}
-                  style={{ paddingRight: searchTerm ? '38px' : '12px' }}
                 />
                 {searchTerm && (
                   <button
                     type="button"
                     onClick={handleClearSearch}
-                    style={{
-                      position: 'absolute',
-                      right: '12px',
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      background: 'none',
-                      border: 'none',
-                      color: 'var(--text-muted)',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      padding: '4px',
-                      borderRadius: '4px'
-                    }}
+                    className="search-clear-icon"
                     title="Clear search query (Esc)"
                     aria-label="Clear search"
                   >
@@ -598,7 +681,7 @@ function App() {
               </div>
 
               <button type="submit" className="action-button primary">
-                Execute Search
+                Search
               </button>
 
               {searchTerm && (
@@ -607,17 +690,26 @@ function App() {
                   onClick={handleClearSearch} 
                   className="action-button secondary"
                   title="Restore complete asset list"
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
                 >
-                  <RotateCcw size={14} /> Clear Filter
+                  <RotateCcw size={14} aria-hidden="true" /> Clear search
                 </button>
               )}
             </form>
           </section>
+          {selectedAssetIds.length > 0 && user?.roleName !== 'Accountant' && (
+            <div className="inventory-selection" role="status">
+              <div><strong>{selectedAssetIds.length} {selectedAssetIds.length === 1 ? 'asset' : 'assets'} selected</strong><span>Selection applies to the inventory below.</span></div>
+              {hasClearance(['Manager', 'SystemAdmin']) ? (
+                <button type="button" ref={transferTriggerRef} onClick={() => setShowTransferModal(true)} className="action-button primary"><ArrowLeftRight size={16} aria-hidden="true" /> Transfer selected</button>
+              ) : (
+                <span className="inventory-selection-note">Bulk transfer requires manager access.</span>
+              )}
+            </div>
+          )}
         </>
       )}
 
-      <main className="content-deck">
+      <div className="content-deck">
         {accountantTab === 'ledger' ? (
           <FinancialLedgerReport />
         ) : accountantTab === 'audit' ? (
@@ -625,17 +717,18 @@ function App() {
         ) : loading ? (
           <div className="loader-overlay"><div className="spinner"></div><p>Querying live transactional tracking logs...</p></div>
         ) : (
-          <div className="table-viewport">
-            <table className="modern-table ledger-table">
+          <div className="table-viewport inventory-viewport" role="region" aria-label="Asset inventory table" tabIndex={0}>
+            <p className="inventory-scroll-hint">Scroll sideways to see all asset details and actions.</p>
+            <table className="modern-table ledger-table inventory-table">
               <thead>
                 <tr>
-                  {user?.roleName !== 'Accountant' && <th style={{ width: '40px' }}><input type="checkbox" disabled /></th>}
-                  <th><Hash size={14} /> ID</th>
-                  <th>Hardware Descriptor</th>
-                  <th><Layers size={14} /> Classification</th>
-                  <th>Value Basis</th>
-                  <th><MapPin size={14} /> Deployment Hub</th>
-                  <th>Status Matrix / Actions</th>
+                  {user?.roleName !== 'Accountant' && <th scope="col" className="inventory-select-column">Select</th>}
+                  <th scope="col"><Hash size={14} aria-hidden="true" /> ID</th>
+                  <th scope="col">Asset</th>
+                  <th scope="col"><Layers size={14} aria-hidden="true" /> Category</th>
+                  <th scope="col">Cost</th>
+                  <th scope="col"><MapPin size={14} aria-hidden="true" /> Room</th>
+                  <th scope="col">Status and actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -653,32 +746,33 @@ function App() {
                             type="checkbox" 
                             checked={selectedAssetIds.includes(asset.id)}
                             disabled={asset.lifecycleState === 5} 
-                            onChange={() => toggleSelectAsset(asset.id)} 
+                            onChange={() => toggleSelectAsset(asset.id)}
+                            aria-label={`Select ${asset.name} for bulk transfer`}
                           />
                         </td>
                       )}
                       <td className="mono">#{asset.id}</td>
                       <td>
                         <div className="asset-meta-cell">
-                          <span className="asset-primary-name">{asset.name}</span>
-                          <span className="asset-secondary-tag">System Identifier Hash: CL-ID-{asset.id} • Relational Handler Key: #{asset.custodianId}</span>
+                          <button type="button" className="asset-name-button" onClick={(e) => { e.stopPropagation(); setActiveInspectedAsset(asset); }}>{asset.name}</button>
+                          <span className="asset-secondary-tag">Custodian #{asset.custodianId}</span>
                         </div>
                       </td>
                       <td><span className="category-pill">{asset.categoryTag}</span></td>
                       <td className="price-text mono">₱{asset.procurementCost.toLocaleString()}</td>
-                      <td><span className="location-text mono">Room Reference: #{asset.roomId}</span></td>
+                      <td><span className="location-text mono">Room #{asset.roomId}</span></td>
                       <td onClick={(e) => e.stopPropagation()}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div className="inventory-status-actions">
                           {getStatusBadge(asset.lifecycleState, asset.isMaintenanceFlagged)}
                           
                           {asset.lifecycleState === 2 && hasClearance(['Inventory Staff', 'Manager', 'SystemAdmin']) && (
-                            <button onClick={() => handleInitiateMaintenance(asset.id)} className="action-button secondary" style={{ padding: '4px 8px', fontSize: '11px' }}>
-                              <Wrench size={10} /> Lock for Repair
+                            <button onClick={() => handleInitiateMaintenance(asset.id)} className="action-button secondary inventory-row-action">
+                              <Wrench size={14} aria-hidden="true" /> Lock for repair
                             </button>
                           )}
                           {asset.lifecycleState === 3 && hasClearance(['Inventory Staff', 'Manager', 'SystemAdmin']) && (
-                            <button onClick={() => handleResolveMaintenance(asset.id)} className="action-button primary" style={{ padding: '4px 8px', fontSize: '11px' }}>
-                              <CheckCircle size={10} /> Resolve Repairs
+                            <button onClick={() => handleResolveMaintenance(asset.id)} className="action-button primary inventory-row-action">
+                              <CheckCircle size={14} aria-hidden="true" /> Resolve repairs
                             </button>
                           )}
                         </div>
@@ -689,8 +783,8 @@ function App() {
                   <tr>
                     <td colSpan={user?.roleName === 'Accountant' ? 6 : 7} className="empty-state-cell">
                       <Trash2 size={40} className="empty-icon" />
-                      <h3>No Operational Records Found</h3>
-                      <p>Adjust your search text to hit alternative partitions.</p>
+                      <h3>No assets found</h3>
+                      <p>Try another asset name or category.</p>
                     </td>
                   </tr>
                 )}
@@ -698,6 +792,7 @@ function App() {
             </table>
           </div>
         )}
+      </div>
       </main>
 
       <AssetDetailSidebar 

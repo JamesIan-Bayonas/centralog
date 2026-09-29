@@ -4,6 +4,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { assetApiEnriched, type DepreciationLedgerReportDto, type LedgerAssetRowDto } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Printer, ShieldAlert, DollarSign, Download, Filter, RotateCcw } from 'lucide-react';
+import './Reports.css';
 
 export const FinancialLedgerReport: React.FC = () => {
   const { hasClearance } = useAuth();
@@ -23,7 +24,7 @@ export const FinancialLedgerReport: React.FC = () => {
         setReport(data);
       } catch (err: any) {
         console.error('Ledger report lookup failed:', err);
-        setErrorMessage(err.message || 'Access denied or database loop timeout.');
+        setErrorMessage(err.message || 'Unable to load the financial ledger.');
       } finally {
         setIsLoading(false);
       }
@@ -33,7 +34,7 @@ export const FinancialLedgerReport: React.FC = () => {
       loadFinancialData();
     } else {
       setIsLoading(false);
-      setErrorMessage('Security Breach: Your account role does not hold clearance to pull deep asset valuation ledgers.');
+      setErrorMessage('Your account does not have access to the financial ledger.');
     }
   }, [hasClearance]);
 
@@ -125,16 +126,16 @@ export const FinancialLedgerReport: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div style={{ padding: '40px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-        Recalculating real-time asset degradation matrix arrays...
+      <div className="report-state" role="status">
+        Loading financial ledger…
       </div>
     );
   }
 
   if (errorMessage) {
     return (
-      <div style={{ padding: '30px', margin: '20px', background: 'rgba(239, 68, 68, 0.05)', border: '1px dashed var(--clr-danger)', borderRadius: '8px', color: 'var(--clr-danger)', display: 'flex', gap: '12px', alignItems: 'center' }}>
-        <ShieldAlert size={20} />
+      <div className="report-state report-error" role="alert">
+        <ShieldAlert size={20} aria-hidden="true" />
         <span style={{ fontSize: '14px', fontWeight: 500 }}>{errorMessage}</span>
       </div>
     );
@@ -143,47 +144,47 @@ export const FinancialLedgerReport: React.FC = () => {
   if (!report) return null;
 
   return (
-    <div className="centralog-ledger-wrapper" style={{ padding: '30px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <section className="centralog-ledger-wrapper financial-report" aria-labelledby="financial-report-title">
       
-      {/* Control Actions Header - Hidden During Physical Print */}
-      <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border)', flexWrap: 'wrap', gap: '16px' }}>
+      {/* Report title prints; export and print actions do not. */}
+      <div className="report-header">
         <div>
-          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)' }}>Enterprise Asset Depreciation Ledger</h2>
-          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Real-time balance metrics computed on: {new Date(report.generatedAt).toLocaleString()}</span>
+          <p className="report-eyebrow">FINANCIAL REPORT</p>
+          <h2 id="financial-report-title">Asset depreciation ledger</h2>
+          <p>Generated {new Date(report.generatedAt).toLocaleString()}</p>
         </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div className="report-actions no-print">
           <button 
+            type="button"
             onClick={handleExportCSV} 
             disabled={filteredRows.length === 0}
-            style={{ background: 'var(--clr-success)', color: '#fff', border: 'none', padding: '10px 16px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, cursor: filteredRows.length === 0 ? 'not-allowed' : 'pointer' }}
+            className="report-button report-button-secondary"
           >
-            <Download size={16} /> Export Report (CSV)
+            <Download size={16} aria-hidden="true" /> Export CSV
           </button>
           <button 
+            type="button"
             onClick={handleTriggerSystemPrint} 
             disabled={filteredRows.length === 0}
-            style={{ background: 'var(--accent)', color: '#fff', border: 'none', padding: '10px 16px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, cursor: filteredRows.length === 0 ? 'not-allowed' : 'pointer' }}
+            className="report-button report-button-primary"
           >
-            <Printer size={16} /> Print Compliance Audit Sheet
+            <Printer size={16} aria-hidden="true" /> Print ledger
           </button>
         </div>
       </div>
 
       {/* Filter Control Toolbar - Hidden During Physical Print */}
-      <div className="no-print" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface-raised)', padding: '16px 20px', borderRadius: '8px', border: '1px solid var(--border)', flexWrap: 'wrap', gap: '14px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600 }}>
-            <Filter size={16} style={{ color: 'var(--accent)' }} />
-            <span>Filter Report:</span>
-          </div>
+      <div className="report-filters no-print">
+        <div className="report-filter-fields">
+          <p className="report-filter-title"><Filter size={16} aria-hidden="true" /> Filter ledger</p>
 
           {/* Status Filter */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600 }}>Status</label>
+          <div className="report-filter-field">
+            <label htmlFor="ledger-status-filter">Status</label>
             <select
+              id="ledger-status-filter"
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
-              style={{ background: 'var(--canvas)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: '4px', padding: '6px 12px', fontSize: '13px', outline: 'none' }}
             >
               <option value="ALL">All Statuses</option>
               <option value="InMaintenance">In Repair Loop</option>
@@ -194,12 +195,12 @@ export const FinancialLedgerReport: React.FC = () => {
           </div>
 
           {/* Classification Filter */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <label style={{ fontSize: '10px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600 }}>Classification</label>
+          <div className="report-filter-field">
+            <label htmlFor="ledger-classification-filter">Classification</label>
             <select
+              id="ledger-classification-filter"
               value={selectedClassification}
               onChange={(e) => setSelectedClassification(e.target.value)}
-              style={{ background: 'var(--canvas)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: '4px', padding: '6px 12px', fontSize: '13px', outline: 'none' }}
             >
               <option value="ALL">All Classifications</option>
               {availableClassifications.map(cat => (
@@ -210,44 +211,45 @@ export const FinancialLedgerReport: React.FC = () => {
 
           {(selectedStatus !== 'ALL' || selectedClassification !== 'ALL') && (
             <button
+              type="button"
               onClick={handleResetFilters}
-              style={{ alignSelf: 'flex-end', background: 'none', border: '1px dashed var(--border)', color: 'var(--text-muted)', borderRadius: '4px', padding: '6px 12px', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+              className="report-button report-reset"
             >
-              <RotateCcw size={12} /> Reset
+              <RotateCcw size={14} aria-hidden="true" /> Reset filters
             </button>
           )}
         </div>
 
-        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-          Showing <strong>{filteredRows.length}</strong> of <strong>{report.rows.length}</strong> items
+        <div className="report-results" role="status">
+          Showing <strong>{filteredRows.length}</strong> of <strong>{report.rows.length}</strong> assets
         </div>
       </div>
 
       {/* Dynamic Summary KPI Deck */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-        <div style={{ background: 'var(--surface-raised)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ padding: '12px', background: 'rgba(56, 189, 248, 0.1)', color: '#38bdf8', borderRadius: '6px' }}>
-            <DollarSign size={24} />
+      <div className="report-summary">
+        <div className="report-summary-card">
+          <div className="report-summary-icon">
+            <DollarSign size={23} aria-hidden="true" />
           </div>
           <div>
             <div style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-              {selectedStatus !== 'ALL' || selectedClassification !== 'ALL' ? 'Filtered Historical Cost' : 'Total Ingested Historical Cost'}
+              {selectedStatus !== 'ALL' || selectedClassification !== 'ALL' ? 'Filtered historical cost' : 'Total historical cost'}
             </div>
-            <div style={{ fontSize: '24px', fontWeight: 700, fontFamily: 'monospace', marginTop: '4px' }}>
+            <div className="report-summary-value mono">
               ₱{filteredCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
           </div>
         </div>
 
-        <div style={{ background: 'var(--surface-raised)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ padding: '12px', background: 'rgba(34, 197, 94, 0.1)', color: 'var(--clr-success)', borderRadius: '6px' }}>
-            <DollarSign size={24} />
+        <div className="report-summary-card">
+          <div className="report-summary-icon">
+            <DollarSign size={23} aria-hidden="true" />
           </div>
           <div>
             <div style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-              {selectedStatus !== 'ALL' || selectedClassification !== 'ALL' ? 'Filtered Book Valuation' : 'Current System Book Valuation'}
+              {selectedStatus !== 'ALL' || selectedClassification !== 'ALL' ? 'Filtered book value' : 'Current book value'}
             </div>
-            <div style={{ fontSize: '24px', fontWeight: 700, fontFamily: 'monospace', marginTop: '4px' }}>
+            <div className="report-summary-value mono">
               ₱{filteredBookValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
           </div>
@@ -255,25 +257,26 @@ export const FinancialLedgerReport: React.FC = () => {
       </div>
 
       {/* Main Financial Matrix Sheet */}
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+      <div className="report-table-frame" role="region" aria-label="Financial ledger table" tabIndex={0}>
+        <p className="report-scroll-hint no-print">Scroll sideways to see all ledger columns.</p>
+        <table className="financial-table">
           <thead>
-            <tr style={{ background: 'var(--surface-raised)', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)' }}>
-              <th style={{ padding: '14px' }}>Asset ID</th>
-              <th style={{ padding: '14px' }}>Hardware Descriptor</th>
-              <th style={{ padding: '14px' }}>Asset Category</th>
-              <th style={{ padding: '14px' }}>Status</th>
-              <th style={{ padding: '14px' }}>Assigned Algorithm</th>
-              <th style={{ padding: '14px', textAlign: 'right' }}>Historical Cost</th>
-              <th style={{ padding: '14px', textAlign: 'right' }}>Accumulated Dep.</th>
-              <th style={{ padding: '14px', textAlign: 'right' }}>Current Book Value</th>
-              <th style={{ padding: '14px', textAlign: 'right' }}>Residual Salvage</th>
+            <tr>
+              <th scope="col">Asset ID</th>
+              <th scope="col">Asset</th>
+              <th scope="col">Category</th>
+              <th scope="col">Status</th>
+              <th scope="col">Depreciation method</th>
+              <th scope="col" className="report-number">Historical cost</th>
+              <th scope="col" className="report-number">Accumulated depreciation</th>
+              <th scope="col" className="report-number">Current book value</th>
+              <th scope="col" className="report-number">Residual salvage</th>
             </tr>
           </thead>
           <tbody>
             {filteredRows.length === 0 ? (
               <tr>
-                <td colSpan={9} style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                <td colSpan={9} className="report-empty">
                   No assets match the selected status and classification criteria.
                 </td>
               </tr>
@@ -290,14 +293,7 @@ export const FinancialLedgerReport: React.FC = () => {
                       </span>
                     </td>
                     <td style={{ padding: '14px' }}>
-                      <span style={{
-                        padding: '3px 8px',
-                        borderRadius: '4px',
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        backgroundColor: isRepairLoop ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)',
-                        color: isRepairLoop ? 'var(--clr-warning)' : 'var(--clr-success)',
-                      }}>
+                      <span className={`report-status ${isRepairLoop ? 'is-repair' : ''}`}>
                         {isRepairLoop ? 'In Repair Loop' : row.currentStatus}
                       </span>
                     </td>
@@ -314,6 +310,6 @@ export const FinancialLedgerReport: React.FC = () => {
         </table>
       </div>
 
-    </div>
+    </section>
   );
 };
