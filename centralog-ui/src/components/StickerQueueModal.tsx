@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { assetApiEnriched, type Asset } from '../services/api';
-import { Printer, Tag, Trash2, X, RefreshCw, QrCode } from 'lucide-react';
+import { Printer, Tag, Trash2, X, RefreshCw } from 'lucide-react';
 import './StickerQueueModal.css';
 
 interface StickerQueueModalProps {
@@ -136,8 +136,8 @@ export const StickerQueueModal: React.FC<StickerQueueModalProps> = ({
           ) : (
             <div className="sticker-grid">
               {queuedAssets.map((asset) => {
-                const propertyCode = asset.propertyNumber || `SPHV-2026-02-${String(asset.id).padStart(4, '0')}`;
-                const serialNum = asset.serialNumber || 'KW16TSDTD2026124-80008';
+                const propertyCode = asset.propertyNumber?.trim() || 'Not recorded';
+                const serialNum = asset.serialNumber?.trim() || 'Not recorded';
                 
                 return (
                   <article key={asset.id} className="sticker-card">
@@ -145,7 +145,8 @@ export const StickerQueueModal: React.FC<StickerQueueModalProps> = ({
                     {/* Top Row: Institution Header & Remove Action */}
                     <div className="sticker-card-header">
                       <div>
-                        <p className="sticker-owner">PROPERTY OF DENR / PENRO</p>
+                        <p className="sticker-owner">DMCCFI ASSET TAG</p>
+                        <span className="sticker-code-label">PROPERTY NO.</span>
                         <strong className="sticker-code mono">{propertyCode}</strong>
                       </div>
                       <button 
@@ -159,10 +160,11 @@ export const StickerQueueModal: React.FC<StickerQueueModalProps> = ({
                       </button>
                     </div>
 
-                    {/* Middle Row: QR Code & Asset Descriptor */}
+                    {/* Middle Row: Recorded asset identifier and descriptor */}
                     <div className="sticker-card-body">
-                      <div className="sticker-qr-symbol" aria-hidden="true">
-                        <QrCode size={52} color="#000000" />
+                      <div className="sticker-asset-id" aria-label={`Asset ID ${asset.id}`}>
+                        <span>ASSET ID</span>
+                        <strong>#{asset.id}</strong>
                       </div>
                       <div className="sticker-card-details">
                         <strong className="sticker-asset-name">{asset.name}</strong>

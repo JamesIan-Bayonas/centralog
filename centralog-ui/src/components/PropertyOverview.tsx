@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   assetApiEnriched, 
   getMediaUrl,
@@ -22,6 +22,7 @@ import {
   Upload,
   Image as ImageIcon
 } from 'lucide-react';
+import './PropertyOverview.css';
 
 interface PropertyOverviewProps {
   assetId: number;
@@ -41,6 +42,32 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
   const [showCustodianModal, setShowCustodianModal] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isUploadingImage, setIsUploadingImage] = useState<boolean>(false);
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showEditModal && !showCustodianModal) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    modalRef.current?.focus();
+    return () => { if (previousFocus?.isConnected) previousFocus.focus(); };
+  }, [showEditModal, showCustodianModal]);
+
+  const handleModalKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      if (showEditModal) setShowEditModal(false);
+      if (showCustodianModal) setShowCustodianModal(false);
+    }
+    if (event.key !== 'Tab') return;
+    const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])'));
+    const first = controls[0];
+    const last = controls[controls.length - 1];
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === event.currentTarget)) {
+      event.preventDefault();
+      last?.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first?.focus();
+    }
+  };
 
   const [editForm, setEditForm] = useState<UpdatePropertyPayload>({
     name: '',
@@ -82,15 +109,10 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
       setAsset(data);
       setHistory(historyData);
 
-      // Pre-fill fallback serial number if unassigned in database record
-      const resolvedSerial = data.serialNumber && data.serialNumber.trim() !== '' 
-        ? data.serialNumber 
-        : 'KW16TSDTD2026124-80008';
-
       setEditForm({
         name: data.name || '',
-        propertyNumber: data.propertyNumber || `SPHV-2026-02-${String(data.id).padStart(4, '0')}`,
-        serialNumber: resolvedSerial,
+        propertyNumber: data.propertyNumber || '',
+        serialNumber: data.serialNumber || '',
         accountCategory: data.accountCategory || data.categoryTag || '',
         categoryTag: data.categoryTag || '',
         procurementCost: data.procurementCost || 0,
@@ -191,38 +213,40 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
   };
 
   if (loading || !asset) {
-    return <div style={{ padding: '40px', color: 'var(--text-muted)' }}>Loading Property Specification Matrix...</div>;
+    return <div className="property-loading" role="status">Loading property details…</div>;
   }
 
   const stateMeta = LifecycleStateMap[asset.lifecycleState] || { label: 'Serviceable', color: 'var(--clr-success)' };
+  const recordedPropertyNumber = asset.propertyNumber?.trim();
+  const recordedSerialNumber = asset.serialNumber?.trim();
 
   return (
-    <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', backgroundColor: 'var(--canvas)', color: 'var(--text-primary)', minHeight: '100vh' }}>
+    <div className="property-page">
       
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--surface)', padding: '16px 20px', borderRadius: '8px', border: '1px solid var(--border)' }}>
-        <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: '1px solid var(--border)', color: 'var(--text-primary)', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer' }}>
+      <div className="property-toolbar">
+        <button type="button" onClick={onBack} className="property-toolbar-button">
           <ArrowLeft size={16} /> Properties
         </button>
-        <button onClick={() => window.print()} style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: 'var(--accent)', color: '#fff', border: 'none', padding: '10px 18px', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}>
-          <Printer size={16} /> Print Sticker
+        <button type="button" onClick={() => window.print()} className="property-toolbar-button property-print-button">
+          <Printer size={16} /> Print property page
         </button>
       </div>
 
-      <div style={{ backgroundColor: 'var(--surface)', padding: '20px', borderRadius: '8px', border: '1px solid var(--border)' }}>
+      <div className="property-intro">
         <div style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '1px' }}>PROPERTY OVERVIEW</div>
-        <h2 style={{ margin: '4px 0', fontSize: '20px', fontWeight: 700 }}>{asset.propertyNumber || `SPHV-2026-02-${String(asset.id).padStart(4, '0')}`}</h2>
+        <h1>{recordedPropertyNumber || `Asset #${asset.id}`}</h1>
         <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Manage assignments, inventory, transfers, attachments, and reports for this property.</span>
       </div>
 
       {actionFeedback && (
-        <div style={{ backgroundColor: 'rgba(56, 189, 248, 0.1)', border: '1px solid var(--accent)', padding: '12px', borderRadius: '6px', color: 'var(--accent)', fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="property-feedback" role="status">
           <span>{actionFeedback}</span>
-          <button onClick={() => setActionFeedback(null)} style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontWeight: 'bold' }}>X</button>
+          <button type="button" onClick={() => setActionFeedback(null)} aria-label="Dismiss notification"><X size={17} aria-hidden="true" /></button>
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: '24px' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div className="property-layout">
+        <div className="property-summary">
           <div style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div style={{ height: '180px', backgroundColor: 'var(--surface-raised)', borderRadius: '6px', border: '1px solid var(--border)', display: 'flex', justifyContent: 'center', alignItems: 'center', color: 'var(--text-muted)', overflow: 'hidden' }}>
               {asset.imageUrl ? (
@@ -236,9 +260,9 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
               )}
             </div>
 
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div className="property-identity-row">
               <span style={{ background: 'var(--accent)', color: '#fff', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>
-                {asset.propertyNumber || `SPHV-2026-02-${String(asset.id).padStart(4, '0')}`}
+                {recordedPropertyNumber || 'Property no. not recorded'}
               </span>
               <span style={{ background: 'rgba(16, 185, 129, 0.1)', color: stateMeta.color, border: `1px solid ${stateMeta.color}`, padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>
                 {stateMeta.label}
@@ -246,7 +270,7 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '12px' }}>
-              <div><span style={{ color: 'var(--text-muted)' }}>SERIAL NUMBER:</span> <strong className="mono">{asset.serialNumber || 'KW16TSDTD2026124-80008'}</strong></div>
+              <div><span style={{ color: 'var(--text-muted)' }}>SERIAL NUMBER:</span> <strong className="mono">{recordedSerialNumber || 'Not recorded'}</strong></div>
               <div><span style={{ color: 'var(--text-muted)' }}>UNIT VALUE:</span> <strong className="mono">₱{asset.procurementCost.toLocaleString()}</strong></div>
               <div><span style={{ color: 'var(--text-muted)' }}>ACCOUNT:</span> <strong>{asset.accountCategory || asset.categoryTag}</strong></div>
               <div><span style={{ color: 'var(--text-muted)' }}>ACQUISITION DATE:</span> <strong className="mono">{new Date(asset.acquisitionDate || asset.createdAt).toLocaleDateString()}</strong></div>
@@ -265,68 +289,65 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div className="property-main">
           <div style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', padding: '20px' }}>
             <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', color: 'var(--text-muted)' }}>Property Description</h4>
             <p style={{ margin: 0, fontSize: '13px', lineHeight: '1.5' }}>
-              {asset.description || `Serial No.: ${asset.serialNumber || 'KW16TSDTD2026124-80008'} ${asset.name} DISPLAY SIZE: 15.6" BRAND: KIWI DIGITAL TABLETOP DISPLAY.`}
+              {asset.description || 'No property description has been recorded.'}
             </p>
           </div>
           {!isAccountant && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-              <div 
+            <div className="property-action-grid">
+              <button type="button" className="property-action-tile"
                 onClick={() => setShowCustodianModal(true)}
-                style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)', padding: '16px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
               >
                 <div>
                   <div style={{ fontWeight: 600, fontSize: '13px' }}>Update End User</div>
                   <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Change property assignment</div>
                 </div>
                 <UserCheck size={18} style={{ color: 'var(--accent)' }} />
-              </div>
+              </button>
 
-              <div 
+              <button type="button" className="property-action-tile"
                 onClick={() => setShowEditModal(true)}
-                style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)', padding: '16px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
               >
                 <div>
                   <div style={{ fontWeight: '600', fontSize: '13px' }}>Edit Property</div>
                   <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Update property details</div>
                 </div>
                 <Edit3 size={18} style={{ color: 'var(--accent)' }} />
-              </div>
+              </button>
 
-              <div 
+              <button type="button" className="property-action-tile"
                 onClick={handleRecordInventory}
-                style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)', padding: '16px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
               >
                 <div>
                   <div style={{ fontWeight: 600, fontSize: '13px' }}>Record Inventory</div>
                   <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Track inventory status</div>
                 </div>
                 <ClipboardCheck size={18} style={{ color: 'var(--clr-warning)' }} />
-              </div>
+              </button>
 
-              <div onClick={handleToggleQueue} style={{ backgroundColor: asset.isStickerQueued ? 'rgba(56, 189, 248, 0.1)' : 'var(--surface)', border: `1px solid ${asset.isStickerQueued ? 'var(--accent)' : 'var(--border)'}`, padding: '16px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
+              <button type="button" onClick={handleToggleQueue} className={`property-action-tile ${asset.isStickerQueued ? 'is-queued' : ''}`} aria-pressed={asset.isStickerQueued}>
                 <div>
                   <div style={{ fontWeight: 600, fontSize: '13px' }}>{asset.isStickerQueued ? 'Queued for Printing' : 'Add To My Sticker Queue'}</div>
                   <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Add to my sticker queue for printing</div>
                 </div>
                 <Tag size={18} style={{ color: 'var(--accent)' }} />
-              </div>
+              </button>
             </div>
           )}
-          <div style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
-            <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', backgroundColor: 'var(--surface-raised)' }}>
-              <button onClick={() => setActiveTab('transfer')} style={{ padding: '12px 20px', border: 'none', background: activeTab === 'transfer' ? 'var(--surface)' : 'none', color: activeTab === 'transfer' ? 'var(--accent)' : 'var(--text-muted)', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}>
+          <div className="property-history">
+            <div className="property-history-tabs" role="tablist" aria-label="Property history">
+              <button type="button" role="tab" aria-selected={activeTab === 'transfer'} aria-controls="property-history-content" onClick={() => setActiveTab('transfer')} className={activeTab === 'transfer' ? 'is-active' : ''}>
                 Transfer History
               </button>
-              <button onClick={() => setActiveTab('inventory')} style={{ padding: '12px 20px', border: 'none', background: activeTab === 'inventory' ? 'var(--surface)' : 'none', color: activeTab === 'inventory' ? 'var(--accent)' : 'var(--text-muted)', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}>
+              <button type="button" role="tab" aria-selected={activeTab === 'inventory'} aria-controls="property-history-content" onClick={() => setActiveTab('inventory')} className={activeTab === 'inventory' ? 'is-active' : ''}>
                 Inventory Logs
               </button>
             </div>
 
-            <div style={{ padding: '24px' }}>
+            <div id="property-history-content" className="property-history-content" role="tabpanel">
               {activeTab === 'transfer' && (
                 history?.timelineEntries && history.timelineEntries.length > 0 ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -357,24 +378,24 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
       </div>
 
       {showEditModal && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }}>
-          <div style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', width: '100%', maxWidth: '540px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div className="property-modal-overlay">
+          <div ref={modalRef} tabIndex={-1} onKeyDown={handleModalKeyDown} className="property-modal" role="dialog" aria-modal="true" aria-labelledby="property-edit-title">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Edit Property Specification</h3>
-              <button onClick={() => setShowEditModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}><X size={18} /></button>
+              <h2 id="property-edit-title" style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Edit property</h2>
+              <button type="button" onClick={() => setShowEditModal(false)} className="property-modal-close" aria-label="Close edit property dialog"><X size={18} /></button>
             </div>
 
             <form onSubmit={handleEditPropertySubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '13px' }}>
               <div>
-                <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '4px' }}>Property Name</label>
-                <input type="text" required value={editForm.name} onChange={(e) => setEditForm(p => ({ ...p, name: e.target.value }))} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: 'var(--canvas)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-primary)' }} />
+                <label htmlFor="property-edit-name" style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '4px' }}>Property name</label>
+                <input id="property-edit-name" type="text" required value={editForm.name} onChange={(e) => setEditForm(p => ({ ...p, name: e.target.value }))} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: 'var(--canvas)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-primary)' }} />
               </div>
 
               {/* REINSTATED PHOTO FILE UPLOADER SECTION */}
               <div>
-                <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '4px' }}>Upload New Photo Attachment</label>
+                <label htmlFor="property-edit-photo" style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '4px' }}>Upload new photo</label>
                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', border: '1px dashed var(--border)', borderRadius: '4px', background: 'var(--canvas)' }}>
-                  <input type="file" accept="image/*" onChange={handleModalFileUpload} disabled={isUploadingImage} style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', cursor: 'pointer' }} />
+                  <input id="property-edit-photo" type="file" accept="image/*" onChange={handleModalFileUpload} disabled={isUploadingImage} style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', cursor: 'pointer' }} />
                   {isUploadingImage ? (
                     <RefreshCw size={16} className="spin text-bright" />
                   ) : editForm.imageUrl ? (
@@ -388,32 +409,34 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div className="property-form-pair">
                 <div>
-                  <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '4px' }}>Property Code / Tag</label>
-                  <input type="text" value={editForm.propertyNumber} onChange={(e) => setEditForm(p => ({ ...p, propertyNumber: e.target.value }))} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: 'var(--canvas)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-primary)' }} />
+                  <label htmlFor="property-edit-code" style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '4px' }}>Property code / tag</label>
+                  <input id="property-edit-code" type="text" placeholder="Not recorded" value={editForm.propertyNumber} onChange={(e) => setEditForm(p => ({ ...p, propertyNumber: e.target.value }))} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: 'var(--canvas)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-primary)' }} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '4px' }}>Serial Number</label>
-                  <input type="text" value={editForm.serialNumber} onChange={(e) => setEditForm(p => ({ ...p, serialNumber: e.target.value }))} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: 'var(--canvas)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-primary)' }} />
+                  <label htmlFor="property-edit-serial" style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '4px' }}>Serial number</label>
+                  <input id="property-edit-serial" type="text" placeholder="Not recorded" value={editForm.serialNumber} onChange={(e) => setEditForm(p => ({ ...p, serialNumber: e.target.value }))} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: 'var(--canvas)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-primary)' }} />
+                </div>
+              </div>
+              <p className="property-form-note">Leave unassigned numbers blank. Stickers only show numbers saved on the asset record.</p>
+
+              <div className="property-form-pair">
+                <div>
+                  <label htmlFor="property-edit-account" style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '4px' }}>Account classification</label>
+                  <input id="property-edit-account" type="text" value={editForm.accountCategory} onChange={(e) => setEditForm(p => ({ ...p, accountCategory: e.target.value }))} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: 'var(--canvas)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-primary)' }} />
+                </div>
+                <div>
+                  <label htmlFor="property-edit-category" style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '4px' }}>Category tag</label>
+                  <input id="property-edit-category" type="text" value={editForm.categoryTag} onChange={(e) => setEditForm(p => ({ ...p, categoryTag: e.target.value }))} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: 'var(--canvas)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-primary)' }} />
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div className="property-form-pair">
                 <div>
-                  <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '4px' }}>Account Classification</label>
-                  <input type="text" value={editForm.accountCategory} onChange={(e) => setEditForm(p => ({ ...p, accountCategory: e.target.value }))} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: 'var(--canvas)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-primary)' }} />
-                </div>
-                <div>
-                  <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '4px' }}>Category Tag</label>
-                  <input type="text" value={editForm.categoryTag} onChange={(e) => setEditForm(p => ({ ...p, categoryTag: e.target.value }))} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: 'var(--canvas)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-primary)' }} />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '4px' }}>Procurement Cost (₱)</label>
+                  <label htmlFor="property-edit-cost" style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '4px' }}>Procurement cost (₱)</label>
                   <input 
+                    id="property-edit-cost"
                     type="number" 
                     min="0" 
                     max="100000000"
@@ -424,19 +447,19 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '4px' }}>Acquisition Date</label>
-                  <input type="date" value={editForm.acquisitionDate} onChange={(e) => setEditForm(p => ({ ...p, acquisitionDate: e.target.value }))} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: 'var(--canvas)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-primary)' }} />
+                  <label htmlFor="property-edit-date" style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '4px' }}>Acquisition date</label>
+                  <input id="property-edit-date" type="date" value={editForm.acquisitionDate} onChange={(e) => setEditForm(p => ({ ...p, acquisitionDate: e.target.value }))} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: 'var(--canvas)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-primary)' }} />
                 </div>
               </div>
 
               <div>
-                <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '4px' }}>Detailed Specification Description</label>
-                <textarea rows={3} value={editForm.description} onChange={(e) => setEditForm(p => ({ ...p, description: e.target.value }))} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: 'var(--canvas)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-primary)', outline: 'none' }} />
+                <label htmlFor="property-edit-description" style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '4px' }}>Description</label>
+                <textarea id="property-edit-description" rows={3} value={editForm.description} onChange={(e) => setEditForm(p => ({ ...p, description: e.target.value }))} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: 'var(--canvas)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-primary)', outline: 'none' }} />
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
                 <button type="button" onClick={() => setShowEditModal(false)} style={{ padding: '8px 16px', background: 'none', border: '1px solid var(--border)', color: 'var(--text-primary)', borderRadius: '4px', cursor: 'pointer' }}>Cancel</button>
-                <button type="submit" disabled={isSubmitting || isUploadingImage} style={{ padding: '8px 16px', background: 'var(--accent)', border: 'none', color: '#fff', fontWeight: 600, borderRadius: '4px', cursor: 'pointer' }}>
+                <button type="submit" disabled={isSubmitting || isUploadingImage} style={{ padding: '8px 16px', background: 'var(--accent)', border: 'none', color: 'var(--accent-contrast)', fontWeight: 600, borderRadius: '4px', cursor: 'pointer' }}>
                   {isSubmitting ? 'Saving...' : 'Commit Modifications'}
                 </button>
               </div>
@@ -446,25 +469,25 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
       )}
 
       {showCustodianModal && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px' }}>
-          <div style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', width: '100%', maxWidth: '420px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div className="property-modal-overlay">
+          <div ref={modalRef} tabIndex={-1} onKeyDown={handleModalKeyDown} className="property-modal property-modal-small" role="dialog" aria-modal="true" aria-labelledby="property-reassign-title">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Reassign Custodian & Room</h3>
-              <button onClick={() => setShowCustodianModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}><X size={18} /></button>
+              <h2 id="property-reassign-title" style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Reassign custodian and room</h2>
+              <button type="button" onClick={() => setShowCustodianModal(false)} className="property-modal-close" aria-label="Close reassignment dialog"><X size={18} /></button>
             </div>
 
             <form onSubmit={handleCustodianReassignSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '13px' }}>
               <div>
-                <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '6px' }}>Assigned Handler Custodian</label>
-                <select value={custodianForm.newCustodianId} onChange={(e) => setCustodianForm(p => ({ ...p, newCustodianId: Number(e.target.value) }))} style={{ width: '100%', boxSizing: 'border-box', padding: '10px', background: 'var(--canvas)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: '4px', outline: 'none' }}>
+                <label htmlFor="property-reassign-custodian" style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '6px' }}>Custodian</label>
+                <select id="property-reassign-custodian" value={custodianForm.newCustodianId} onChange={(e) => setCustodianForm(p => ({ ...p, newCustodianId: Number(e.target.value) }))} style={{ width: '100%', boxSizing: 'border-box', padding: '10px', background: 'var(--canvas)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: '4px', outline: 'none' }}>
                   <option value={1}>Custodian #1 (Systems Lead)</option>
                   <option value={2}>Custodian #2 (Network Admin)</option>
                 </select>
               </div>
 
               <div>
-                <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '6px' }}>Physical Room Assignment</label>
-                <select value={custodianForm.newRoomId} onChange={(e) => setCustodianForm(p => ({ ...p, newRoomId: Number(e.target.value) }))} style={{ width: '100%', boxSizing: 'border-box', padding: '10px', background: 'var(--canvas)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: '4px', outline: 'none' }}>
+                <label htmlFor="property-reassign-room" style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '6px' }}>Room</label>
+                <select id="property-reassign-room" value={custodianForm.newRoomId} onChange={(e) => setCustodianForm(p => ({ ...p, newRoomId: Number(e.target.value) }))} style={{ width: '100%', boxSizing: 'border-box', padding: '10px', background: 'var(--canvas)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: '4px', outline: 'none' }}>
                   <option value={101}>Room 101 (Admin Office)</option>
                   <option value={202}>Room 202 (Server Room)</option>
                   <option value={303}>Room 303 (Laboratory)</option>
@@ -473,7 +496,7 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
                 <button type="button" onClick={() => setShowCustodianModal(false)} style={{ padding: '8px 16px', background: 'none', border: '1px solid var(--border)', color: 'var(--text-primary)', borderRadius: '4px', cursor: 'pointer' }}>Cancel</button>
-                <button type="submit" disabled={isSubmitting} style={{ padding: '8px 16px', background: 'var(--accent)', border: 'none', color: '#fff', fontWeight: 600, borderRadius: '4px', cursor: 'pointer' }}>
+                <button type="submit" disabled={isSubmitting} style={{ padding: '8px 16px', background: 'var(--accent)', border: 'none', color: 'var(--accent-contrast)', fontWeight: 600, borderRadius: '4px', cursor: 'pointer' }}>
                   {isSubmitting ? 'Updating...' : 'Authorize Reassignment'}
                 </button>
               </div>
