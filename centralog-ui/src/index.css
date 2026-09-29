@@ -65,6 +65,12 @@ body { margin: 0; font-family: var(--font-main); transition: background 0.3s; }
 }
 .row-maintenance { animation: row-pulse 2s infinite ease-in-out; }
 
+@media (prefers-reduced-motion: reduce) {
+  body { transition: none; }
+  .row-maintenance,
+  .spin { animation: none !important; }
+}
+
 /* SHARED TABLE STYLES */
 .ledger-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .ledger-table th { 
