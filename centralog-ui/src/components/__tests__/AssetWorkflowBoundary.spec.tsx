@@ -1,11 +1,23 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { vi } from 'vitest';
 import { AssetDetailSidebar } from '../AssetDetailSidebar';
+import { PropertyOverview } from '../PropertyOverview';
 import { useAuth } from '../../context/AuthContext';
-import { type Asset } from '../../services/api';
+import { assetApi, assetApiEnriched, type Asset } from '../../services/api';
 
-// Mock the Auth Context core layer to programmatically mutate permission bounds
-jest.mock('../../context/AuthContext');
-const mockedUseAuth = useAuth as jest.Mock;
+vi.mock('../../context/AuthContext', () => ({ useAuth: vi.fn() }));
+const mockedUseAuth = vi.mocked(useAuth);
+
+const setRole = (roleName: string, hasClearance: (roles: string[]) => boolean) => {
+  mockedUseAuth.mockReturnValue({
+    user: { userId: 1, username: 'test', email: 'test@example.invalid', roleName },
+    token: 'test-token',
+    isAuthenticated: true,
+    loginSession: vi.fn(),
+    logoutSession: vi.fn(),
+    hasClearance
+  });
+};
 
 const mockActiveAsset: Asset = {
   id: 101,
@@ -30,20 +42,19 @@ const mockMaintenanceAsset: Asset = {
 };
 
 describe('CentraLog UI Lifecycle & RBAC Boundary Safeguards', () => {
-  const onInitiateMock = jest.fn();
-  const onResolveMock = jest.fn();
-  const onActivateMock = jest.fn();
-  const onCloseMock = jest.fn();
-  const onOpenOverviewMock = jest.fn();
+  const onInitiateMock = vi.fn(async () => {});
+  const onResolveMock = vi.fn(async () => {});
+  const onActivateMock = vi.fn(async () => {});
+  const onCloseMock = vi.fn();
+  const onOpenOverviewMock = vi.fn();
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
+    vi.spyOn(assetApi, 'getAssetHistory').mockResolvedValue({ assetId: 101, assetName: mockActiveAsset.name, timelineEntries: [] });
   });
 
   it('[CRITICAL-UI-01]: Must completely hide action options if account lacks clearance scopes', () => {
-    mockedUseAuth.mockReturnValue({
-      hasClearance: () => false
-    });
+    setRole('GeneralStaff', () => false);
 
     render(
       <AssetDetailSidebar 
@@ -56,14 +67,13 @@ describe('CentraLog UI Lifecycle & RBAC Boundary Safeguards', () => {
       />
     );
 
-    expect(screen.queryByText(/System Actions & Lifecycle Control/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Transfer Out to Active Repair Loop/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Open property details/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Retire asset permanently/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Start maintenance/i })).not.toBeInTheDocument();
   });
 
   it('[CRITICAL-UI-02]: Must render freeze warnings and expose resolve buttons when asset is in maintenance', () => {
-    mockedUseAuth.mockReturnValue({
-      hasClearance: (roles: string[]) => roles.includes('Inventory Staff')
-    });
+    setRole('Inventory Staff', (roles) => roles.includes('Inventory Staff'));
 
     render(
       <AssetDetailSidebar 
@@ -76,9 +86,9 @@ describe('CentraLog UI Lifecycle & RBAC Boundary Safeguards', () => {
       />
     );
 
-    expect(screen.getByText(/\* Real-time calculation frozen for duration of maintenance window status/i)).toBeInTheDocument();
+    expect(screen.getByText(/Depreciation is paused during maintenance/i)).toBeInTheDocument();
     
-    const resolveBtn = screen.getByRole('button', { name: /Confirm Repair Completion & Unfreeze Asset/i });
+    const resolveBtn = screen.getByRole('button', { name: /Complete maintenance/i });
     expect(resolveBtn).toBeInTheDocument();
 
     fireEvent.click(resolveBtn);
@@ -86,9 +96,7 @@ describe('CentraLog UI Lifecycle & RBAC Boundary Safeguards', () => {
   });
 
   it('[CRITICAL-UI-03]: Must trigger Property Overview navigation when Inspect button is pressed', () => {
-    mockedUseAuth.mockReturnValue({
-      hasClearance: (roles: string[]) => roles.includes('Inventory Staff')
-    });
+    setRole('Inventory Staff', (roles) => roles.includes('Inventory Staff'));
 
     render(
       <AssetDetailSidebar 
@@ -101,10 +109,60 @@ describe('CentraLog UI Lifecycle & RBAC Boundary Safeguards', () => {
       />
     );
 
-    const inspectBtn = screen.getByRole('button', { name: /Inspect Full Property Dashboard/i });
+    const inspectBtn = screen.getByRole('button', { name: /Open property details/i });
     expect(inspectBtn).toBeInTheDocument();
 
     fireEvent.click(inspectBtn);
     expect(onOpenOverviewMock).toHaveBeenCalledWith(101);
+  });
+
+  it('keeps accountant asset inspection read-only', () => {
+    setRole('Accountant', (roles) => roles.includes('Accountant'));
+
+    render(
+      <AssetDetailSidebar
+        asset={mockActiveAsset}
+        onClose={onCloseMock}
+        onInitiateMaintenance={onInitiateMock}
+        onResolveMaintenance={onResolveMock}
+        onActivateAsset={onActivateMock}
+        onOpenOverview={onOpenOverviewMock}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: 'Open property details' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Start maintenance' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retire asset permanently' })).not.toBeInTheDocument();
+  });
+
+  it('keeps missing property and serial numbers blank in the edit payload', async () => {
+    setRole('Manager', (roles) => roles.includes('Manager'));
+    vi.spyOn(assetApiEnriched, 'getAssetById').mockResolvedValue({
+      ...mockActiveAsset,
+      propertyNumber: '',
+      serialNumber: '',
+      description: ''
+    });
+    vi.spyOn(assetApiEnriched, 'getAssetHistory').mockResolvedValue({
+      assetId: 101,
+      assetName: mockActiveAsset.name,
+      timelineEntries: []
+    });
+    const updateProperty = vi.spyOn(assetApiEnriched, 'updateProperty').mockResolvedValue({ message: 'Saved' });
+
+    render(<PropertyOverview assetId={101} onBack={vi.fn()} />);
+    expect(await screen.findByRole('heading', { name: 'Asset #101' })).toBeInTheDocument();
+    expect(screen.getByText('Property no. not recorded')).toBeInTheDocument();
+    expect(screen.getByText('No property description has been recorded.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Edit Property/i }));
+    expect(screen.getByLabelText('Property code / tag')).toHaveValue('');
+    expect(screen.getByLabelText('Serial number')).toHaveValue('');
+    fireEvent.click(screen.getByRole('button', { name: 'Commit Modifications' }));
+
+    await waitFor(() => expect(updateProperty).toHaveBeenCalledWith(101, expect.objectContaining({
+      propertyNumber: '',
+      serialNumber: ''
+    })));
   });
 });

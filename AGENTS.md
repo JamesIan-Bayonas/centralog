@@ -28,3 +28,7 @@ Before choosing a visual direction, compare at least two plausible approaches ag
 - Compare behavior before and after at desktop, tablet, and phone widths, including touch navigation, long text, empty/loading states, and every role-specific view available for testing.
 - Check that procurement and other existing actions still call the same handlers with the same data and respect the same permission gates. Run the frontend build, lint, and relevant existing tests after implementation; investigate failures rather than masking them.
 - Review the rendered result, not just the code. Report the design issues found, what changed, and any unverified states or remaining risks.
+
+## Design progress record
+
+Keep `centralog-ui/UI_POLISH_PROGRESS.md` as the durable record for every design pass. Before editing a screen, read the roadmap and the latest progress entry so earlier decisions and open risks are not lost. After each pass, append a dated entry with: screen and files touched; concrete design issues found; options considered and why the chosen approach won; UI changes made; workflow boundaries checked; build, lint, test, and rendered checks; remaining gaps and the next roadmap target. Mark incomplete or unverified work explicitly. Update the roadmap's current progress at the same time. Do not rewrite earlier entries to make past work appear more complete.
