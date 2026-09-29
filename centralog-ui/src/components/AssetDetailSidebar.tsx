@@ -156,28 +156,28 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
         {/* Real-time Accounting Algorithms Box */}
         <div>
           <h4 style={{ margin: '0 0 12px 0', fontSize: '13px', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <TrendingDown size={14} /> Valuation & Depreciation Engine
+            <TrendingDown size={14} /> Value and depreciation
           </h4>
-          <div style={{ background: 'var(--surface-raised)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div className="asset-drawer-value-facts" style={{ background: 'var(--surface-raised)', padding: '16px', borderRadius: '8px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-              <span style={{ color: 'var(--text-muted)' }}>Initial Procurement Cost</span>
+              <span style={{ color: 'var(--text-muted)' }}>Procurement cost</span>
               <span className="mono" style={{ fontWeight: 600, color: 'var(--text-primary)' }}>₱{asset.procurementCost.toLocaleString()}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-              <span style={{ color: 'var(--text-muted)' }}>Assigned Accounting Formula</span>
+              <span style={{ color: 'var(--text-muted)' }}>Depreciation method</span>
               <span style={{ fontSize: '12px', color: 'var(--text-primary)' }}>{DepreciationMethodMap[asset.depreciationMethod] || 'Not Set'}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-              <span style={{ color: 'var(--text-muted)' }}>Expected Lifespan Span</span>
+              <span style={{ color: 'var(--text-muted)' }}>Expected lifespan</span>
               <span className="mono" style={{ color: 'var(--text-primary)' }}>{asset.expectedLifespanMonths} Months</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-              <span style={{ color: 'var(--text-muted)' }}>Residual Salvage Value Basis</span>
+              <span style={{ color: 'var(--text-muted)' }}>Salvage value</span>
               <span className="mono" style={{ color: 'var(--text-primary)' }}>₱{asset.salvageValue.toLocaleString()}</span>
             </div>
             {isInMaintenance && (
               <div style={{ borderTop: '1px dashed var(--border)', paddingTop: '10px', fontSize: '11px', color: 'var(--clr-warning)', textAlign: 'center' }}>
-                * Real-time calculation frozen for duration of maintenance window status.
+                Depreciation is paused during maintenance.
               </div>
             )}
           </div>
@@ -186,16 +186,16 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
         {/* Relational Placement Reference Grid */}
         <div>
           <h4 style={{ margin: '0 0 12px 0', fontSize: '13px', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Calendar size={14} /> Operational Environment Mapping
+            <Calendar size={14} /> Location and custodian
           </h4>
           <div className="asset-drawer-facts">
             <div style={{ background: 'var(--surface-raised)', padding: '12px', borderRadius: '6px', border: '1px solid var(--border)' }}>
-              <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginBottom: '4px' }}>ROOM ALLOCATION KEY</div>
+              <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginBottom: '4px' }}>ROOM</div>
               <span className="mono" style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Room #{asset.roomId}</span>
             </div>
             <div style={{ background: 'var(--surface-raised)', padding: '12px', borderRadius: '6px', border: '1px solid var(--border)' }}>
-              <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginBottom: '4px' }}>CUSTODIAN ASSIGNMENT KEY</div>
-              <span className="mono" style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Handler #{asset.custodianId}</span>
+              <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginBottom: '4px' }}>CUSTODIAN</div>
+              <span className="mono" style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Custodian #{asset.custodianId}</span>
             </div>
           </div>
         </div>
@@ -203,7 +203,7 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
         {/* Immutable Audit Trail Timeline */}
         <div>
           <h4 style={{ margin: '0 0 12px 0', fontSize: '13px', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <History size={14} /> System Interaction & Audit Logs
+            <History size={14} /> Transfer history
           </h4>
           
           <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: '8px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -218,7 +218,7 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
             {!isTimelineLoading && !timelineError && historyTimeline && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', position: 'relative' }}>
                 {historyTimeline.timelineEntries.length === 0 ? (
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No historical relocations logged for this resource mapping node.</span>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No transfers have been recorded for this asset.</span>
                 ) : (
                   historyTimeline.timelineEntries.map((log) => (
                     <div key={log.logId} style={{ borderLeft: '2px solid var(--accent)', paddingLeft: '12px', marginLeft: '4px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -248,7 +248,7 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
         {!isDisposed && !isInMaintenance && hasClearance(['Manager', 'SystemAdmin']) && (
           <div style={{ border: '1px dashed var(--clr-danger)', padding: '16px', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '12px', background: 'rgba(239, 68, 68, 0.02)' }}>
             <h4 style={{ margin: 0, fontSize: '12px', color: 'var(--clr-danger)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Trash2 size={14} /> Institutional Asset Decommission Panel
+              <Trash2 size={14} /> Retire asset
             </h4>
             <form onSubmit={handleDecommissionSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div>
@@ -279,7 +279,7 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
                 disabled={isProcessing}
                 style={{ width: '100%', padding: '10px', background: 'var(--clr-danger)', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
               >
-                {isProcessing ? 'Processing Decommission...' : 'Execute Permanent Retirement'}
+                {isProcessing ? 'Retiring asset…' : 'Retire asset permanently'}
               </button>
             </form>
           </div>
@@ -291,7 +291,7 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
       {hasClearance(['Inventory Staff', 'Manager', 'SystemAdmin', 'InventoryStaff', 'Accountant']) && (
         <div className="asset-drawer-actions">
           <h4 style={{ margin: 0, fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Settings size={12} /> {user?.roleName === 'Accountant' ? 'Audit Navigation Hub' : 'Sequential Lifecycle Phase Advance'}
+            <Settings size={12} /> {user?.roleName === 'Accountant' ? 'Asset details' : 'Asset actions'}
           </h4>
           
           <button 
@@ -299,7 +299,7 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
             className="action-button primary" 
             style={{ width: '100%', padding: '12px', justifyContent: 'center', fontWeight: 600, backgroundColor: 'var(--accent)', border: 'none', color: 'var(--accent-contrast)', borderRadius: '4px', marginBottom: '8px', cursor: 'pointer' }}
           >
-            <Maximize2 size={16} style={{ marginRight: '8px' }}/> Inspect Full Property Dashboard
+            <Maximize2 size={16} style={{ marginRight: '8px' }}/> Open property details
           </button>
 
           {/* Operational Mutation Buttons: Hidden specifically for Accountants */}
@@ -311,7 +311,7 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
                   className="action-button primary" 
                   style={{ width: '100%', padding: '12px', justifyContent: 'center', cursor: 'pointer', fontWeight: 600, backgroundColor: 'var(--clr-success)', border: 'none', color: '#fff', borderRadius: '4px' }}
                 >
-                  Deploy Item to Active Operational Fleet
+                  Activate asset
                 </button>
               )}
               
@@ -321,20 +321,20 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
                   className="action-button secondary" 
                   style={{ width: '100%', padding: '12px', justifyContent: 'center', color: 'var(--clr-warning)', borderColor: 'var(--clr-warning)', cursor: 'pointer', fontWeight: 600, borderRadius: '4px' }}
                 >
-                  Transfer Out to Active Repair Loop
+                  Start maintenance
                 </button>
               )}
 
               {(numericState === 3 || stringState === 'inmaintenance') && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', background: 'rgba(0,0,0,0.05)', padding: '12px', borderRadius: '6px' }}>
-                  <span style={{ fontSize: '11px', color: 'var(--text-primary)', fontWeight: 600 }}>CLOSE OUT TRACKING MAINTENANCE LOG</span>
+                  <span style={{ fontSize: '11px', color: 'var(--text-primary)', fontWeight: 600 }}>MAINTENANCE</span>
                   
                   <button 
                     onClick={() => onResolveMaintenance(asset.id)}
                     className="action-button primary" 
                     style={{ width: '100%', padding: '12px', justifyContent: 'center', cursor: 'pointer', fontWeight: 600, backgroundColor: 'var(--clr-success)', border: 'none', color: '#fff', borderRadius: '4px' }}
                   >
-                    Confirm Repair Completion & Unfreeze Asset
+                    Complete maintenance
                   </button>
                 </div>
               )}
@@ -343,7 +343,7 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
 
           {(numericState === 5 || stringState === 'disposed') && (
             <span style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', display: 'block' }}>
-              This resource matrix node is structurally finalized and unmodifiable.
+              This asset is disposed and cannot be changed here.
             </span>
           )}
         </div>
