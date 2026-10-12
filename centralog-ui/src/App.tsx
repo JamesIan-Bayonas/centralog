@@ -76,6 +76,8 @@ function App() {
 
   // PROCUREMENT SUGGESTIONS & AUTOCOMPLETE STATES
   const [nameInputValue, setNameInputValue] = useState<string>('');
+  const [nameValidationError, setNameValidationError] = useState<string | null>(null);
+  const procurementNameRef = useRef<HTMLInputElement>(null);
   const [hardwareNameSuggestions, setHardwareNameSuggestions] = useState<string[]>([]);
   const [categorySuggestions, setCategorySuggestions] = useState<string[]>([
     'Workstations',
@@ -134,6 +136,7 @@ function App() {
 
   const handleNameInputChange = async (val: string) => {
     setNameInputValue(val);
+    if (val.trim()) setNameValidationError(null);
     if (val.trim().length > 0) {
       try {
         const matches = await assetApiEnriched.getHardwareNameSuggestions(val.trim());
@@ -501,6 +504,13 @@ function App() {
                 e.preventDefault();
                 const form = e.currentTarget;
                 const formData = new FormData(form);
+                const resolvedName = nameInputValue.trim();
+
+                if (!resolvedName) {
+                  setNameValidationError('Enter an asset name containing more than spaces.');
+                  procurementNameRef.current?.focus();
+                  return;
+                }
                 
                 const resolvedCategory = selectedCategory.trim();
 
@@ -517,7 +527,7 @@ function App() {
                 }
 
                 const payload = {
-                  name: nameInputValue.trim(),
+                  name: resolvedName,
                   categoryTag: resolvedCategory,
                   procurementCost: procurementCostValue,
                   roomId: Number(formData.get('roomId')),
@@ -545,14 +555,24 @@ function App() {
                   <label htmlFor="procurement-name">Asset name <span aria-hidden="true">*</span></label>
                   <input 
                     id="procurement-name"
+                    ref={procurementNameRef}
                     type="text" 
                     name="assetName" 
                     required 
+                    pattern={'.*\\S.*'}
+                    aria-invalid={nameValidationError ? true : undefined}
+                    aria-describedby={nameValidationError ? 'procurement-name-error' : undefined}
+                    onInvalid={(e) => {
+                      e.preventDefault();
+                      setNameValidationError('Enter an asset name containing more than spaces.');
+                      e.currentTarget.focus();
+                    }}
                     list="hardware-name-history-list"
                     value={nameInputValue}
                     onChange={(e) => handleNameInputChange(e.target.value)}
                     placeholder="e.g., Lenovo Legion R7" 
                   />
+                  {nameValidationError && <p id="procurement-name-error" className="form-field-error" role="alert">{nameValidationError}</p>}
                   <datalist id="hardware-name-history-list">
                     {hardwareNameSuggestions.map((suggestion, idx) => (
                       <option key={idx} value={suggestion} />
@@ -758,7 +778,18 @@ function App() {
                           <span className="asset-secondary-tag">Custodian #{asset.custodianId}</span>
                         </div>
                       </td>
-                      <td><span className="category-pill">{asset.categoryTag}</span></td>
+                      <td>
+                        <button
+                          type="button"
+                          className="category-pill category-detail-button"
+                          aria-label={`${asset.categoryTag}: open asset details for ${asset.name}`}
+                          aria-haspopup="dialog"
+                          title="Open asset details"
+                          onClick={(e) => { e.stopPropagation(); setActiveInspectedAsset(asset); }}
+                        >
+                          {asset.categoryTag}
+                        </button>
+                      </td>
                       <td className="price-text mono">₱{asset.procurementCost.toLocaleString()}</td>
                       <td><span className="location-text mono">Room #{asset.roomId}</span></td>
                       <td onClick={(e) => e.stopPropagation()}>

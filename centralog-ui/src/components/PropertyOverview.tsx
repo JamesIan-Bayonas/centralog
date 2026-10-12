@@ -42,6 +42,8 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
   const [showCustodianModal, setShowCustodianModal] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isUploadingImage, setIsUploadingImage] = useState<boolean>(false);
+  const [acquisitionDateError, setAcquisitionDateError] = useState<string | null>(null);
+  const acquisitionDateRef = useRef<HTMLInputElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -76,7 +78,7 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
     accountCategory: '',
     categoryTag: '',
     procurementCost: 0,
-    acquisitionDate: new Date().toISOString().split('T')[0],
+    acquisitionDate: '',
     description: '',
     imageUrl: ''
   });
@@ -118,7 +120,7 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
         procurementCost: data.procurementCost || 0,
         acquisitionDate: data.acquisitionDate 
           ? new Date(data.acquisitionDate).toISOString().split('T')[0] 
-          : new Date().toISOString().split('T')[0],
+          : '',
         description: data.description || '',
         imageUrl: data.imageUrl || ''
       });
@@ -164,14 +166,16 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
   const handleEditPropertySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!asset) return;
+    if (!editForm.acquisitionDate || isNaN(Date.parse(editForm.acquisitionDate))) {
+      setAcquisitionDateError('Enter a valid acquisition date.');
+      acquisitionDateRef.current?.focus();
+      return;
+    }
+    setAcquisitionDateError(null);
     setIsSubmitting(true);
     setActionFeedback(null);
 
-    // Sanitize acquisitionDate and optional strings prior to API dispatch
-    const sanitizedAcquisitionDate = editForm.acquisitionDate && !isNaN(Date.parse(editForm.acquisitionDate))
-      ? editForm.acquisitionDate
-      : new Date().toISOString().split('T')[0];
-
+    // Preserve the validated acquisition date and sanitize optional strings.
     const sanitizedPayload: UpdatePropertyPayload = {
       ...editForm,
       name: editForm.name.trim(),
@@ -179,7 +183,7 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
       serialNumber: editForm.serialNumber?.trim() || '',
       accountCategory: editForm.accountCategory?.trim() || '',
       categoryTag: editForm.categoryTag?.trim() || '',
-      acquisitionDate: sanitizedAcquisitionDate,
+      acquisitionDate: editForm.acquisitionDate,
       description: editForm.description?.trim() || ''
     };
 
@@ -447,8 +451,28 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
                   />
                 </div>
                 <div>
-                  <label htmlFor="property-edit-date" style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '4px' }}>Acquisition date</label>
-                  <input id="property-edit-date" type="date" value={editForm.acquisitionDate} onChange={(e) => setEditForm(p => ({ ...p, acquisitionDate: e.target.value }))} style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: 'var(--canvas)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text-primary)' }} />
+                  <label htmlFor="property-edit-date" style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '4px' }}>Acquisition date (required)</label>
+                  <input
+                    id="property-edit-date"
+                    ref={acquisitionDateRef}
+                    type="date"
+                    required
+                    value={editForm.acquisitionDate}
+                    aria-invalid={acquisitionDateError ? true : undefined}
+                    aria-describedby={acquisitionDateError ? 'property-edit-date-error' : undefined}
+                    onInvalid={(e) => {
+                      e.preventDefault();
+                      setAcquisitionDateError('Enter a valid acquisition date.');
+                      e.currentTarget.focus();
+                    }}
+                    onChange={(e) => {
+                      const acquisitionDate = e.target.value;
+                      setEditForm(p => ({ ...p, acquisitionDate }));
+                      if (acquisitionDate && !isNaN(Date.parse(acquisitionDate))) setAcquisitionDateError(null);
+                    }}
+                    style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', background: 'var(--canvas)', border: `1px solid ${acquisitionDateError ? 'var(--field-error)' : 'var(--border)'}`, borderRadius: '4px', color: 'var(--text-primary)' }}
+                  />
+                  {acquisitionDateError && <p id="property-edit-date-error" className="form-field-error" role="alert">{acquisitionDateError}</p>}
                 </div>
               </div>
 

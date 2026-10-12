@@ -87,14 +87,33 @@ describe('Partner QA reports #8, #9 and #10', () => {
     expect(screen.getByLabelText(/Acquisition date/)).toHaveValue('');
   });
 
-  it.each(['Manager', 'SystemAdmin', 'InventoryStaff', 'GeneralStaff'])('#9 already opens asset details from the category for %s', async role => {
+  it.each(['Manager', 'SystemAdmin', 'InventoryStaff', 'GeneralStaff'])('#9 exposes an accessible category detail action for %s and returns focus after dismissal', async role => {
     setRole(role);
     render(<App />);
-    const row = await screen.findByRole('row', { name: /Thinkpad/ });
-    fireEvent.click(row.querySelector('.category-pill')!);
+    const categoryButton = await screen.findByRole('button', { name: 'Workstations: open asset details for Thinkpad' });
+    expect(categoryButton).toHaveAttribute('type', 'button');
+    expect(categoryButton).toHaveAttribute('aria-haspopup', 'dialog');
+    expect(categoryButton.tabIndex).toBe(0);
+    categoryButton.focus();
+    fireEvent.click(categoryButton);
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Close asset details' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Close asset details' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(categoryButton).toHaveFocus();
+  });
+
+  it('#9 opens the correct asset when two category actions have the same visible text', async () => {
+    const secondAsset = { ...asset, id: 41, name: 'Laboratory workstation' };
+    vi.mocked(api.get).mockImplementation(async url => ({ data: url.includes('summary') ? {
+      totalAssetCount: 2, totalSystemValue: 70000, activeCount: 0,
+      inMaintenanceCount: 0, urgentAlertCount: 0, disposedCount: 0
+    } : {
+      items: [asset, secondAsset], totalCount: 2, pageNumber: 1, pageSize: 20, totalPages: 1
+    } }));
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Workstations: open asset details for Laboratory workstation' }));
+    expect(await screen.findByRole('heading', { name: 'Laboratory workstation' })).toBeInTheDocument();
+    await waitFor(() => expect(assetApi.getAssetHistory).toHaveBeenCalledWith(41));
   });
 });
