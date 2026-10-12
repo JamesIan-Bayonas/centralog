@@ -29,6 +29,7 @@ const mockActiveAsset: Asset = {
   lifecycleState: 2, 
   createdAt: "2026-01-01T00:00:00Z",
   updatedAt: "2026-01-01T00:00:00Z",
+  acquisitionDate: "2026-01-01T00:00:00Z",
   nextServiceDate: "2026-10-01T00:00:00Z",
   isMaintenanceFlagged: false,
   expectedLifespanMonths: 60,
