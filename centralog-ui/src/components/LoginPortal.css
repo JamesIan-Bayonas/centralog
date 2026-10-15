@@ -70,9 +70,8 @@
   height: 42px;
   display: grid;
   place-items: center;
-  color: var(--accent-contrast);
-  background: var(--accent);
-  border-radius: 12px;
+  flex: none;
+  border-radius: 25%;
 }
 
 .login-brand-name {
@@ -570,10 +569,6 @@
     width: 34px;
     height: 34px;
     border-radius: 9px;
-  }
-
-  .login-brand-mark svg {
-    width: 19px;
   }
 
   .login-brand-name {

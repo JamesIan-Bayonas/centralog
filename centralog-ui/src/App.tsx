@@ -5,6 +5,7 @@ import { api, assetApiEnriched, type Asset, type DashboardSummary, type PagedRes
 import { useAuth } from './context/AuthContext';
 import { LoginPortal } from './components/LoginPortal'; 
 import { Search, ShieldAlert, CheckCircle, RotateCw, PackageCheck, Package, Trash2, Layers, MapPin, Hash, DollarSign, ArrowLeftRight, Wrench, LogOut, UserCheck, Upload, Image as ImageIcon, X, RotateCcw, Tag, ClipboardList, Menu, LayoutDashboard, Sun, Moon, Leaf } from 'lucide-react';
+import { CentraLogMark } from './components/CentraLogMark';
 import './App.css';
 import { AssetDetailSidebar } from './components/AssetDetailSidebar';
 import { FinancialLedgerReport } from './components/FinancialLedgerReport';
@@ -291,7 +292,7 @@ function App() {
       <header className="workspace-header">
         <div className="workspace-header-top">
           <div className="logo-section">
-            <div className="icon-frame"><PackageCheck size={23} aria-hidden="true" /></div>
+            <div className="icon-frame"><CentraLogMark /></div>
             <div>
               <p className="workspace-brand-name">CentraLog<span>.</span></p>
               <span className="subtitle">DMCCFI asset management</span>

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { api, type AuthResponse } from '../services/api';
 import './LoginPortal.css';
+import { CentraLogMark } from './CentraLogMark';
 
 type Theme = 'theme-dmc' | 'theme-light' | 'theme-obsidian';
 
@@ -90,7 +91,7 @@ export const LoginPortal: React.FC<LoginPortalProps> = ({ currentTheme, onThemeC
       <div className="login-shell">
         <header className="login-topbar">
           <div className="login-brand" aria-label="CentraLog">
-            <span className="login-brand-mark"><PackageCheck size={22} strokeWidth={2.2} aria-hidden="true" /></span>
+            <span className="login-brand-mark"><CentraLogMark /></span>
             <span className="login-brand-name">CentraLog<span className="login-brand-dot">.</span></span>
           </div>
 

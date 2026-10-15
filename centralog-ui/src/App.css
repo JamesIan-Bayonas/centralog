@@ -250,9 +250,7 @@
   display: grid;
   place-items: center;
   flex: none;
-  background: var(--accent);
-  border-radius: 11px;
-  color: var(--accent-contrast);
+  border-radius: 25%;
 }
 
 .workspace-brand-name {
