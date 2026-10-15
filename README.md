@@ -94,66 +94,16 @@ CentraLog provides a unified management framework that synchronizes physical log
 
 ```text
 CentraLog/
-├── CentraLog.API/                      # ASP.NET Core Web API Host Project
-│   ├── Controllers/                    # REST API Controllers
-│   │   ├── AssetController.cs          # Asset endpoints (Search, Bulk Transfer, Maintenance, Disposal, Media)
-│   │   ├── AuthController.cs           # User authentication & JWT bearer issuance
-│   │   └── HealthController.cs         # System status health checks
-│   ├── Middleware/                     # HTTP Request Pipeline Middleware
-│   │   └── GlobalExceptionMiddleware.cs # Centralized error handling and JSON normalization
-│   ├── Properties/
-│   │   └── launchSettings.json         # Development server profiles
-│   ├── Program.cs                      # Application composition root & service registry
-│   └── CentraLog.API.csproj            # Backend project manifest
-├── CentraLog.Core/                     # Core Domain & Abstractions Layer
-│   ├── Domain/
-│   │   ├── Entities/                   # Database Entities (Asset, User, AuditLog, MaintenanceLog)
-│   │   └── Enums/                      # LifecycleState, UserRole, DepreciationAlgorithm
-│   ├── DTOs/                           # Data Transfer Objects (Auth, BulkTransfer, Maintenance, Ledger)
-│   ├── Interfaces/                     # Service and strategy interfaces (IAssetService, ITokenService, IDepreciationStrategy)
-│   ├── PagedResult.cs                  # Server-side pagination result wrapper
-│   └── CentraLog.Core.csproj
-├── CentraLog.Infrastructure/           # Data Access & External Infrastructure Layer
-│   ├── BackgroundServices/             # Automated background workers
-│   │   └── MaintenanceDaemonService.cs # Periodic background maintenance inspector daemon
-│   ├── Data/                           # Entity Framework Core Data Layer
-│   │   ├── ApplicationDbContext.cs     # DbContext configuration with MySQL mappings
-│   │   └── DatabaseSeeder.cs           # Automatic seed engine for accounts and asset fleets
-│   ├── Migrations/                     # Database schema migration files
-│   ├── Services/                       # Application Services Implementation
-│   │   ├── AssetService.cs             # Core asset management business logic & transactions
-│   │   ├── TokenService.cs             # Cryptographic JWT signing service
-│   │   └── Depreciation/               # Depreciation algorithm strategies
-│   │       ├── StraightLineStrategy.cs
-│   │       └── DoubleDecliningStrategy.cs
-│   └── CentraLog.Infrastructure.csproj
-├── CentraLog.Tests/                    # Integration & Unit Testing Project
-│   ├── Integration/
-│   │   └── AssetControllerTests.cs     # Integration tests verifying API endpoints and transactions
-│   └── CentraLog.Tests.csproj
-├── centralog-ui/                       # React 19 + TypeScript + Vite Single Page Application
-│   ├── src/
-│   │   ├── components/                 # React UI Components
-│   │   │   ├── AssetDetailSidebar.tsx  # Detailed asset drawer & lifecycle controls
-│   │   │   ├── FinancialLedgerReport.tsx # High-density financial depreciation ledger
-│   │   │   ├── LoginPortal.tsx         # User login interface
-│   │   │   ├── PropertyOverview.tsx    # Property detail viewer, editor, and timeline
-│   │   │   ├── StickerQueueModal.tsx   # Batch property sticker printable deck generator
-│   │   │   └── __tests__/              # Vitest component test suites
-│   │   ├── context/
-│   │   │   └── AuthContext.tsx         # Session context and RBAC clearance provider
-│   │   ├── services/
-│   │   │   └── api.ts                  # Axios HTTP client, interceptors, and typed API endpoints
-│   │   ├── styles/                     # Component & media print stylesheets
-│   │   ├── App.tsx                     # Main dashboard workspace & layout container
-│   │   └── main.tsx                    # React application bootstrapper
-│   ├── package.json                    # Frontend node dependencies & scripts
-│   ├── vite.config.ts                  # Vite build tool and Vitest configuration
-│   └── tsconfig.json                   # TypeScript compiler options
-├── production_delivery.sql             # Consolidated MySQL database schema initialization script
-└── CentraLog.API.Solution.slnx         # Visual Studio Solution manifest
-
+├── CentraLog.API/             # API endpoints, authentication, and application setup
+├── CentraLog.Core/            # Domain models, DTOs, and service interfaces
+├── CentraLog.Infrastructure/  # Database access, asset services, and depreciation calculations
+├── CentraLog.Tests/           # Backend tests
+├── centralog-ui/              # React and TypeScript frontend, including component tests
+├── production_delivery.sql   # Database initialization script
+└── CentraLog.API.Solution.slnx
 ```
+
+The backend separates API handling, domain definitions, and infrastructure implementations. The React frontend communicates with it through HTTP API calls.
 
 ---
 
