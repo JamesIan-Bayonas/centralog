@@ -51,6 +51,17 @@
 
 body { margin: 0; font-family: var(--font-main); transition: background 0.3s; }
 
+/* Keep the product mark consistent across themes and separate from action icons. */
+.centralog-mark {
+  display: block;
+  width: 100%;
+  height: 100%;
+  flex: none;
+  border-radius: 25%;
+  outline: 1px solid #ffffff30;
+  outline-offset: -1px;
+}
+
 .app-viewport {
   background-color: var(--canvas);
   color: var(--text-primary);
