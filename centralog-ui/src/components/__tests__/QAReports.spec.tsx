@@ -1,6 +1,7 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { vi } from 'vitest';
 import App from '../../App';
+import { AuditLogReport } from '../AuditLogReport';
 import { PropertyOverview } from '../PropertyOverview';
 import { useAuth } from '../../context/AuthContext';
 import { api, assetApi, assetApiEnriched, type Asset } from '../../services/api';
@@ -14,6 +15,13 @@ const asset: Asset = {
   acquisitionDate: '2026-01-10T00:00:00Z', nextServiceDate: null,
   isMaintenanceFlagged: false, expectedLifespanMonths: 60, depreciationMethod: 1,
   salvageValue: 0
+};
+
+const maintenanceEvent = {
+  logId: 1, oldRoomId: 101, oldRoomName: 'Admin office', newRoomId: 101, newRoomName: 'Admin office',
+  oldCustodianId: 1, oldCustodianName: 'Systems lead', newCustodianId: 1, newCustodianName: 'Systems lead',
+  modifiedByUserId: 1, operatorUsername: 'qa', timestamp: '2026-10-17T00:00:00Z',
+  changeSummary: 'Maintenance resolved'
 };
 
 function setRole(roleName = 'Manager') {
@@ -37,6 +45,87 @@ beforeEach(() => {
   const history = { assetId: asset.id, assetName: asset.name, timelineEntries: [] };
   vi.spyOn(assetApi, 'getAssetHistory').mockResolvedValue(history);
   vi.spyOn(assetApiEnriched, 'getAssetHistory').mockResolvedValue(history);
+});
+
+describe('November partner QA fixes', () => {
+  it('confirms assets selected across inventory searches and submits the listed IDs', async () => {
+    const printer = { ...asset, id: 30, name: 'Printer Epson' };
+    vi.mocked(api.get).mockImplementation(async (url, config) => ({ data: url.includes('summary') ? {
+      totalAssetCount: 2, totalSystemValue: 70000, activeCount: 0,
+      inMaintenanceCount: 0, urgentAlertCount: 0, disposedCount: 0
+    } : { items: (config?.params as { searchTerm?: string } | undefined)?.searchTerm === 'Printer Epson' ? [printer] : [asset] } }));
+    const transfer = vi.spyOn(assetApiEnriched, 'executeBulkTransfer').mockResolvedValue({ message: 'Transferred' });
+    render(<App />);
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Select Thinkpad/ }));
+    const search = screen.getByRole('textbox', { name: /Search assets by name or category/ });
+    fireEvent.change(search, { target: { value: 'Printer Epson' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+    const printerSelection = await screen.findByRole('checkbox', { name: /Select Printer Epson/ });
+    expect(screen.queryByRole('checkbox', { name: /Select Thinkpad/ })).not.toBeInTheDocument();
+    expect(printerSelection).not.toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: 'Transfer selected' }));
+    const confirmation = screen.getByRole('dialog', { name: 'Transfer selected assets' });
+    expect(within(confirmation).getByRole('list', { name: 'Assets to transfer' })).toHaveTextContent('#40 Thinkpad');
+    expect(confirmation).not.toHaveTextContent('Printer Epson');
+    fireEvent.click(within(confirmation).getByRole('button', { name: 'Cancel' }));
+    expect(transfer).not.toHaveBeenCalled();
+
+    fireEvent.click(printerSelection);
+    fireEvent.click(screen.getByRole('button', { name: 'Transfer selected' }));
+    const batchConfirmation = screen.getByRole('dialog', { name: 'Transfer selected assets' });
+    expect(within(batchConfirmation).getAllByRole('listitem').map(row => row.textContent)).toEqual([
+      '#40 Thinkpad', '#30 Printer Epson',
+    ]);
+    fireEvent.change(within(batchConfirmation).getByLabelText('Destination room'), { target: { value: '202' } });
+    fireEvent.change(within(batchConfirmation).getByLabelText('New custodian'), { target: { value: '2' } });
+    fireEvent.click(within(batchConfirmation).getByRole('button', { name: 'Transfer assets' }));
+    await waitFor(() => expect(transfer).toHaveBeenCalledWith([40, 30], 202, 2));
+    await waitFor(() => expect(batchConfirmation).not.toBeInTheDocument());
+    expect(printerSelection).not.toBeChecked();
+  });
+
+  it('shows the recorded maintenance event and gives older responses a neutral fallback', async () => {
+    vi.mocked(assetApi.getAssetHistory).mockResolvedValue({
+      assetId: asset.id, assetName: asset.name, timelineEntries: [
+        maintenanceEvent,
+        { ...maintenanceEvent, logId: 2, changeSummary: undefined },
+        { ...maintenanceEvent, logId: 3, changeSummary: 'Room relocation', newRoomId: 202, newRoomName: 'Server room' },
+      ]
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Thinkpad' }));
+    const drawer = within(screen.getByRole('dialog', { name: 'Asset details' }));
+    expect(await drawer.findByText('Maintenance resolved')).toBeInTheDocument();
+    expect(drawer.getByText('Asset record changed')).toBeInTheDocument();
+    expect(drawer.getByText('Room relocation')).toBeInTheDocument();
+    expect(drawer.getByText('Server room')).toBeInTheDocument();
+    expect(drawer.queryByText(/verified\/decommissioned/)).not.toBeInTheDocument();
+  });
+
+  it('filters audit entries by name or exact ID and restores the original order on clear', async () => {
+    setRole('Accountant');
+    const request = vi.spyOn(assetApiEnriched, 'getAuditLog').mockResolvedValue([
+      { ...maintenanceEvent, assetId: 30, assetName: 'Printer Epson' },
+      { ...maintenanceEvent, logId: 2, assetId: 130, assetName: 'Projector 30' },
+      { ...maintenanceEvent, logId: 3, assetId: 30, assetName: 'Printer Epson', changeSummary: 'Asset record changed' },
+    ]);
+    render(<AuditLogReport />);
+    const search = await screen.findByRole('searchbox', { name: 'Search by asset name or ID' });
+    const assetCells = () => screen.getAllByRole('row').slice(1).map(row => within(row).getAllByRole('cell')[1]?.textContent);
+    const originalOrder = assetCells();
+    expect(originalOrder).toEqual(['#30 Printer Epson', '#130 Projector 30', '#30 Printer Epson']);
+    for (const value of ['pRiNtEr eP', '#30', ' 30 ']) {
+      fireEvent.change(search, { target: { value } });
+      expect(assetCells()).toEqual(['#30 Printer Epson', '#30 Printer Epson']);
+      expect(screen.getByRole('status')).toHaveTextContent('2 of 3 entries');
+    }
+    fireEvent.change(search, { target: { value: 'QA-NO-ASSET-99999' } });
+    expect(screen.getByText('No audit entries match this asset search.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+    expect(search).toHaveFocus();
+    expect(assetCells()).toEqual(originalOrder);
+    expect(request).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('Partner QA reports #8, #9 and #10', () => {

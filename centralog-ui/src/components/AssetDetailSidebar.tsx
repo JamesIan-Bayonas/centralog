@@ -203,7 +203,7 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
         {/* Immutable Audit Trail Timeline */}
         <div>
           <h4 style={{ margin: '0 0 12px 0', fontSize: '13px', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '1px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <History size={14} /> Transfer history
+            <History size={14} /> Asset history
           </h4>
           
           <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: '8px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -218,7 +218,7 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
             {!isTimelineLoading && !timelineError && historyTimeline && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', position: 'relative' }}>
                 {historyTimeline.timelineEntries.length === 0 ? (
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No transfers have been recorded for this asset.</span>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No changes have been recorded for this asset.</span>
                 ) : (
                   historyTimeline.timelineEntries.map((log) => (
                     <div key={log.logId} style={{ borderLeft: '2px solid var(--accent)', paddingLeft: '12px', marginLeft: '4px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -227,12 +227,13 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
                         <span style={{ color: 'var(--text-muted)' }}>{new Date(log.timestamp).toLocaleString()}</span>
                       </div>
                       <span style={{ fontSize: '12px', color: 'var(--text-primary)' }}>
-                        {log.oldRoomId !== log.newRoomId ? (
-                          <>Transferred layout from <strong>{log.oldRoomName}</strong> to <strong>{log.newRoomName}</strong>.</>
-                        ) : (
-                          <>Asset status verified/decommissioned natively inside current workspace.</>
-                        )}
+                        {log.changeSummary?.trim() || 'Asset record changed'}
                       </span>
+                      {log.oldRoomId !== log.newRoomId && (
+                        <span style={{ fontSize: '12px', color: 'var(--text-primary)' }}>
+                          Transferred from <strong>{log.oldRoomName}</strong> to <strong>{log.newRoomName}</strong>.
+                        </span>
+                      )}
                       <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                         Assigned Custodian: {log.newCustodianName}
                       </span>

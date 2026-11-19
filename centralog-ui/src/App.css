@@ -1025,6 +1025,22 @@
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.22);
 }
 .transfer-dialog:focus { outline: none; }
+.transfer-asset-list {
+  max-height: 9rem;
+  min-height: 2.75rem;
+  overflow-y: auto;
+  margin: 0;
+  padding: 8px 12px;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+.transfer-asset-list li { padding: 5px 0; }
+.transfer-asset-list li + li { border-top: 1px solid var(--border); }
+.transfer-asset-list .mono { margin-right: 5px; color: var(--text-muted); }
 .transfer-dialog-actions { display: flex; justify-content: flex-end; gap: 10px; padding-top: 4px; }
 .transfer-dialog-actions .action-button { min-height: 44px; justify-content: center; }
 
@@ -1033,7 +1049,7 @@
 .inventory-selection button:focus-visible,
 .inventory-viewport:focus-visible,
 .inventory-table :is(button, input):focus-visible,
-.transfer-dialog :is(select, button):focus-visible {
+.transfer-dialog :is(select, button, .transfer-asset-list):focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }

@@ -33,7 +33,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [activeOverviewAssetId, setActiveOverviewAssetId] = useState<number | null>(null);
 
-  const [selectedAssetIds, setSelectedAssetIds] = useState<number[]>([]);
+  const [selectedAssets, setSelectedAssets] = useState<Pick<Asset, 'id' | 'name'>[]>([]);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const transferDialogRef = useRef<HTMLFormElement>(null);
   const transferTriggerRef = useRef<HTMLButtonElement>(null);
@@ -167,9 +167,9 @@ function App() {
     }
   };
 
-  const toggleSelectAsset = (id: number) => {
-    setSelectedAssetIds(prev => 
-      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+  const toggleSelectAsset = ({ id, name }: Pick<Asset, 'id' | 'name'>) => {
+    setSelectedAssets(prev =>
+      prev.some(asset => asset.id === id) ? prev.filter(asset => asset.id !== id) : [...prev, { id, name }]
     );
   };
 
@@ -180,9 +180,9 @@ function App() {
       return;
     }
     try {
-      const response = await assetApiEnriched.executeBulkTransfer(selectedAssetIds, Number(destinationRoom), Number(newCustodian));
+      const response = await assetApiEnriched.executeBulkTransfer(selectedAssets.map(asset => asset.id), Number(destinationRoom), Number(newCustodian));
       setActionFeedback(response.message);
-      setSelectedAssetIds([]);
+      setSelectedAssets([]);
       setShowTransferModal(false);
       loadDashboardMetrics();
       loadAssetsList(searchTerm);
@@ -436,7 +436,7 @@ function App() {
                 onKeyDown={(event) => {
                   if (event.key === 'Escape') setShowTransferModal(false);
                   if (event.key !== 'Tab') return;
-                  const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('select, button:not([disabled])'));
+                  const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('select, button:not([disabled]), [tabindex="0"]'));
                   const first = controls[0];
                   const last = controls[controls.length - 1];
                   if (event.shiftKey && (document.activeElement === first || document.activeElement === event.currentTarget)) {
@@ -452,9 +452,14 @@ function App() {
                   <div className="transfer-dialog-icon"><ArrowLeftRight size={21} aria-hidden="true" /></div>
                   <div>
                     <h2 id="transfer-title">Transfer selected assets</h2>
-                    <p id="transfer-description">Move {selectedAssetIds.length} selected {selectedAssetIds.length === 1 ? 'asset' : 'assets'} to a new room and custodian.</p>
+                    <p id="transfer-description">Move {selectedAssets.length} selected {selectedAssets.length === 1 ? 'asset' : 'assets'} to a new room and custodian.</p>
                   </div>
                 </div>
+                <ul className="transfer-asset-list" aria-label="Assets to transfer" tabIndex={0}>
+                  {selectedAssets.map(asset => (
+                    <li key={asset.id}><span className="mono">#{asset.id}</span> {asset.name}</li>
+                  ))}
+                </ul>
                 <div className="transfer-field">
                   <label htmlFor="transfer-room">Destination room</label>
                   <select id="transfer-room" value={destinationRoom} onChange={(e) => setDestinationRoom(Number(e.target.value))}>
@@ -717,9 +722,9 @@ function App() {
               )}
             </form>
           </section>
-          {selectedAssetIds.length > 0 && user?.roleName !== 'Accountant' && (
+          {selectedAssets.length > 0 && user?.roleName !== 'Accountant' && (
             <div className="inventory-selection" role="status">
-              <div><strong>{selectedAssetIds.length} {selectedAssetIds.length === 1 ? 'asset' : 'assets'} selected</strong><span>Selection applies to the inventory below.</span></div>
+              <div><strong>{selectedAssets.length} {selectedAssets.length === 1 ? 'asset' : 'assets'} selected</strong><span>Selection stays active across searches.</span></div>
               {hasClearance(['Manager', 'SystemAdmin']) ? (
                 <button type="button" ref={transferTriggerRef} onClick={() => setShowTransferModal(true)} className="action-button primary"><ArrowLeftRight size={16} aria-hidden="true" /> Transfer selected</button>
               ) : (
@@ -765,9 +770,9 @@ function App() {
                         <td onClick={(e) => e.stopPropagation()}>
                           <input 
                             type="checkbox" 
-                            checked={selectedAssetIds.includes(asset.id)}
+                            checked={selectedAssets.some(selected => selected.id === asset.id)}
                             disabled={asset.lifecycleState === 5} 
-                            onChange={() => toggleSelectAsset(asset.id)}
+                            onChange={() => toggleSelectAsset(asset)}
                             aria-label={`Select ${asset.name} for bulk transfer`}
                           />
                         </td>

@@ -106,5 +106,38 @@ namespace CentraLog.Tests
             Assert.Equal("Room 202 (Server Room)", entry.NewRoomName);
             Assert.Equal("Custodian handoff and room relocation", entry.ChangeSummary);
         }
+
+        [Theory]
+        [InlineData("Maintenance resolved", "Maintenance resolved")]
+        [InlineData("  ", "Asset record changed")]
+        public async Task GetAssetHistory_ReturnsTheRecordedAuditSummary(string recordedSummary, string expectedSummary)
+        {
+            var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .Options;
+
+            await using var context = new ApplicationDbContext(options);
+            await context.Assets.AddAsync(new Asset { Id = 30, Name = "Printer Epson" });
+            await context.AuditLogs.AddAsync(new AuditLog
+            {
+                AssetId = 30,
+                OldRoomId = 101,
+                NewRoomId = 101,
+                OldCustodianId = 1,
+                NewCustodianId = 1,
+                ChangeSummary = recordedSummary
+            });
+            await context.SaveChangesAsync();
+
+            var service = new AssetService(context);
+            var auditEntry = Assert.Single(await service.GetAuditLogAsync());
+            var history = await service.GetAssetHistoryAsync(30);
+            var assetEntry = Assert.Single(history.TimelineEntries);
+
+            Assert.Equal(auditEntry.LogId, assetEntry.LogId);
+            Assert.Equal(auditEntry.Timestamp, assetEntry.Timestamp);
+            Assert.Equal(expectedSummary, assetEntry.ChangeSummary);
+            Assert.Equal(auditEntry.ChangeSummary, assetEntry.ChangeSummary);
+        }
     }
 }

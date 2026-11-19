@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ClipboardList, ShieldAlert } from 'lucide-react';
 import { assetApiEnriched, type AuditLogEntryDto } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -9,6 +9,8 @@ export const AuditLogReport = () => {
   const [entries, setEntries] = useState<AuditLogEntryDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [assetSearch, setAssetSearch] = useState('');
+  const assetSearchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const loadAuditLog = async () => {
@@ -41,6 +43,14 @@ export const AuditLogReport = () => {
     );
   }
 
+  const query = assetSearch.trim().toLowerCase();
+  const idQuery = query.replace(/^#/, '');
+  const searchById = /^\d+$/.test(idQuery);
+  const matchingEntries = query ? entries.filter(entry => searchById
+    ? String(entry.assetId) === idQuery
+    : entry.assetName.toLowerCase().includes(query)
+  ) : entries;
+
   return (
     <section className="audit-report" aria-labelledby="audit-report-title">
       <div className="report-header audit-report-header">
@@ -50,10 +60,33 @@ export const AuditLogReport = () => {
           <h2 id="audit-report-title">Audit log</h2>
           <p>Read-only history of asset changes, custodian handoffs, and room relocations.</p>
         </div>
-        <span className="audit-count">{entries.length} {entries.length === 1 ? 'entry' : 'entries'}</span>
+        <span className="audit-count" role="status">
+          {query ? `${matchingEntries.length} of ` : ''}{entries.length} {entries.length === 1 ? 'entry' : 'entries'}
+        </span>
       </div>
 
-      <div className="report-table-frame" role="region" aria-label="Audit log table" tabIndex={0}>
+      {entries.length > 0 && (
+        <div className="report-filters audit-search no-print" role="search" aria-label="Audit log">
+          <div className="report-filter-field">
+            <label htmlFor="audit-asset-search">Search by asset name or ID</label>
+            <input
+              id="audit-asset-search"
+              ref={assetSearchRef}
+              type="search"
+              placeholder="e.g. Printer or #30"
+              aria-controls="audit-log-results"
+              value={assetSearch}
+              onChange={event => setAssetSearch(event.target.value)}
+            />
+          </div>
+          <button type="button" className="report-button" disabled={!assetSearch} onClick={() => {
+            setAssetSearch('');
+            assetSearchRef.current?.focus();
+          }}>Clear search</button>
+        </div>
+      )}
+
+      <div id="audit-log-results" className="report-table-frame" role="region" aria-label="Audit log table" tabIndex={0}>
         <p className="report-scroll-hint no-print">Scroll sideways to see the full audit entry.</p>
         <table className="modern-table ledger-table audit-table">
           <thead>
@@ -67,7 +100,7 @@ export const AuditLogReport = () => {
             </tr>
           </thead>
           <tbody>
-            {entries.length > 0 ? entries.map((entry) => {
+            {matchingEntries.length > 0 ? matchingEntries.map((entry) => {
               const custodianChanged = entry.oldCustodianId !== entry.newCustodianId;
               const roomChanged = entry.oldRoomId !== entry.newRoomId;
 
@@ -82,7 +115,9 @@ export const AuditLogReport = () => {
                 </tr>
               );
             }) : (
-              <tr><td colSpan={6} className="empty-state-cell">No audited asset changes have been recorded yet.</td></tr>
+              <tr><td colSpan={6} className="empty-state-cell">
+                {query ? 'No audit entries match this asset search.' : 'No audited asset changes have been recorded yet.'}
+              </td></tr>
             )}
           </tbody>
         </table>

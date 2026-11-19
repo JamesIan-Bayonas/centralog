@@ -71,7 +71,7 @@
 .report-filter-title svg { color: var(--accent); }
 .report-filter-field { min-width: 170px; display: flex; flex-direction: column; gap: 6px; }
 .report-filter-field label { color: var(--text-muted); font-size: 11px; font-weight: 700; }
-.report-filter-field select {
+.report-filter-field :is(select, input) {
   min-height: 44px;
   max-width: 100%;
   padding: 9px 11px;
@@ -114,6 +114,9 @@
 .audit-report-header { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; justify-content: stretch; gap: 12px; }
 .audit-report-header > svg { flex: none; }
 .audit-count { color: var(--text-muted); font-size: 12px; white-space: nowrap; }
+.audit-search { justify-content: flex-start; gap: 12px; }
+.audit-search .report-filter-field { flex: 0 1 320px; min-width: 0; }
+.audit-search input { box-sizing: border-box; width: 100%; }
 .audit-table { min-width: 980px; }
 .audit-table td { vertical-align: top; line-height: 1.5; }
 .audit-table td:nth-child(1),
@@ -123,6 +126,7 @@
 .audit-table td:nth-child(4),
 .audit-table td:nth-child(5) { min-width: 155px; }
 .financial-report :is(button, select):focus-visible,
+.audit-search :is(input, button):focus-visible,
 .audit-report .report-table-frame:focus-visible,
 .financial-report .report-table-frame:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
@@ -141,6 +145,7 @@
   .report-filter-fields { width: 100%; }
   .report-filter-title { flex-basis: 100%; }
   .report-filter-field { flex: 1 1 100%; }
+  .audit-search .report-filter-field { flex-basis: 100%; }
   .report-reset { width: 100%; }
   .report-results { padding: 0; }
   .report-summary { grid-template-columns: 1fr; }

@@ -80,6 +80,7 @@ export interface DashboardSummary {
 }
 
 export interface AuditLogTimelineEntryDto {
+  changeSummary?: string;
   logId: number;
   oldRoomId: number;
   oldRoomName: string;

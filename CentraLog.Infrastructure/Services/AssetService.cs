@@ -284,7 +284,8 @@ namespace CentraLog.Infrastructure.Services
                     NewCustodianName = newCustodianName,
                     ModifiedByUserId = log.ModifiedByUserId,
                     OperatorUsername = operatorName ?? "System Automated Daemon",
-                    Timestamp = log.Timestamp
+                    Timestamp = log.Timestamp,
+                    ChangeSummary = GetAuditChangeSummary(log)
                 });
             }
 
@@ -328,12 +329,13 @@ namespace CentraLog.Infrastructure.Services
                     ModifiedByUserId = log.ModifiedByUserId,
                     OperatorUsername = operatorUsername ?? "System Automated Daemon",
                     Timestamp = log.Timestamp,
-                    ChangeSummary = string.IsNullOrWhiteSpace(log.ChangeSummary)
-                        ? "Asset record changed"
-                        : log.ChangeSummary
+                    ChangeSummary = GetAuditChangeSummary(log)
                 };
             }).ToList();
         }
+
+        private static string GetAuditChangeSummary(AuditLog log) =>
+            string.IsNullOrWhiteSpace(log.ChangeSummary) ? "Asset record changed" : log.ChangeSummary;
 
         private static string GetRoomName(int roomId) => roomId switch
         {
