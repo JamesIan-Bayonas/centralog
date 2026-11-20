@@ -1,8 +1,11 @@
 using CentraLog.Core.Domain.Entities;
 using CentraLog.Core.Domain.Enums;
+using CentraLog.Core.DTOs;
 using CentraLog.Infrastructure.Data;
 using CentraLog.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using System.Text.Json;
 
 namespace CentraLog.Tests
 {
@@ -125,6 +128,7 @@ namespace CentraLog.Tests
                 NewRoomId = 101,
                 OldCustodianId = 1,
                 NewCustodianId = 1,
+                Timestamp = new DateTime(2026, 11, 20, 8, 54, 18, DateTimeKind.Unspecified),
                 ChangeSummary = recordedSummary
             });
             await context.SaveChangesAsync();
@@ -136,8 +140,62 @@ namespace CentraLog.Tests
 
             Assert.Equal(auditEntry.LogId, assetEntry.LogId);
             Assert.Equal(auditEntry.Timestamp, assetEntry.Timestamp);
+            Assert.Equal(DateTimeKind.Utc, auditEntry.Timestamp.Kind);
+            Assert.Equal("\"2026-11-20T08:54:18Z\"", JsonSerializer.Serialize(assetEntry.Timestamp));
             Assert.Equal(expectedSummary, assetEntry.ChangeSummary);
             Assert.Equal(auditEntry.ChangeSummary, assetEntry.ChangeSummary);
+        }
+
+        [Fact]
+        public async Task Maintenance_RecordsStartAndResolutionInBothHistoryViews()
+        {
+            var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .ConfigureWarnings(warnings => warnings.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+                .Options;
+
+            await using var context = new ApplicationDbContext(options);
+            var asset = new Asset
+            {
+                Id = 30, Name = "Printer Epson", RoomId = 101, CustodianId = 1,
+                LifecycleState = LifecycleState.Active, IsMaintenanceFlagged = true
+            };
+            context.Assets.Add(asset);
+            await context.SaveChangesAsync();
+
+            var service = new AssetService(context);
+            var command = new InitiateMaintenanceCommandDto { IssueDescription = "Print alignment" };
+            await service.InitiateMaintenanceAsync(asset.Id, command, 7);
+
+            var started = Assert.Single((await service.GetAssetHistoryAsync(asset.Id)).TimelineEntries);
+            var maintenance = Assert.Single(await context.MaintenanceLogs.ToListAsync());
+            Assert.Equal("Maintenance started", started.ChangeSummary);
+            Assert.Equal(maintenance.StartTime, started.Timestamp);
+            Assert.Equal(7, started.ModifiedByUserId);
+            Assert.Equal(asset.RoomId, started.OldRoomId);
+            Assert.Equal(started.OldRoomId, started.NewRoomId);
+            Assert.Equal(asset.CustodianId, started.OldCustodianId);
+            Assert.Equal(started.OldCustodianId, started.NewCustodianId);
+            Assert.Equal(LifecycleState.InMaintenance, asset.LifecycleState);
+            Assert.False(asset.IsMaintenanceFlagged);
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() => service.InitiateMaintenanceAsync(asset.Id, command, 7));
+            Assert.Single(await service.GetAuditLogAsync());
+
+            await service.ResolveMaintenanceActionAsync(asset.Id, new MaintenanceActionRequestDto
+            {
+                TargetState = LifecycleState.Active,
+                ResolutionNotes = "Alignment corrected"
+            }, 8);
+
+            var history = (await service.GetAssetHistoryAsync(asset.Id)).TimelineEntries.OrderBy(entry => entry.LogId).ToArray();
+            var audit = (await service.GetAuditLogAsync()).OrderBy(entry => entry.LogId).ToArray();
+            Assert.Equal(new[] { "Maintenance started", "Maintenance resolved" }, history.Select(entry => entry.ChangeSummary));
+            Assert.Equal(history.Select(entry => (entry.LogId, entry.ChangeSummary, entry.Timestamp)),
+                audit.Select(entry => (entry.LogId, entry.ChangeSummary, entry.Timestamp)));
+            Assert.Equal(maintenance.EndTime!.Value, history[1].Timestamp);
+            Assert.Equal(8, history[1].ModifiedByUserId);
+            Assert.Equal(LifecycleState.Active, asset.LifecycleState);
         }
     }
 }

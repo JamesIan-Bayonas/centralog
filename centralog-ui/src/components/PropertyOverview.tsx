@@ -8,6 +8,7 @@ import {
   type UpdatePropertyPayload,
   type UpdateCustodianPayload
 } from '../services/api';
+import { formatAuditTimestamp } from '../services/auditTimestamp';
 import { useAuth } from '../context/AuthContext';
 import { 
   Printer, 
@@ -223,6 +224,9 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
   const stateMeta = LifecycleStateMap[asset.lifecycleState] || { label: 'Serviceable', color: 'var(--clr-success)' };
   const recordedPropertyNumber = asset.propertyNumber?.trim();
   const recordedSerialNumber = asset.serialNumber?.trim();
+  const transferEntries = history?.timelineEntries.filter(entry =>
+    entry.oldRoomId !== entry.newRoomId || entry.oldCustodianId !== entry.newCustodianId
+  ) ?? [];
 
   return (
     <div className="property-page">
@@ -353,12 +357,14 @@ export const PropertyOverview: React.FC<PropertyOverviewProps> = ({ assetId, onB
 
             <div id="property-history-content" className="property-history-content" role="tabpanel">
               {activeTab === 'transfer' && (
-                history?.timelineEntries && history.timelineEntries.length > 0 ? (
+                transferEntries.length > 0 ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {history.timelineEntries.map(entry => (
+                    {transferEntries.map(entry => (
                       <div key={entry.logId} style={{ borderLeft: '2px solid var(--accent)', paddingLeft: '12px', fontSize: '12px' }}>
-                        <div>Transferred from {entry.oldRoomName} to {entry.newRoomName}</div>
-                        <div style={{ color: 'var(--text-muted)', fontSize: '11px' }}>Assigned Custodian: {entry.newCustodianName} • By @{entry.operatorUsername} on {new Date(entry.timestamp).toLocaleString()}</div>
+                        <div>{entry.oldRoomId !== entry.newRoomId
+                          ? `Transferred from ${entry.oldRoomName} to ${entry.newRoomName}`
+                          : 'Custodian reassigned'}</div>
+                        <div style={{ color: 'var(--text-muted)', fontSize: '11px' }}>Assigned Custodian: {entry.newCustodianName} • By @{entry.operatorUsername} on {formatAuditTimestamp(entry.timestamp)}</div>
                       </div>
                     ))}
                   </div>

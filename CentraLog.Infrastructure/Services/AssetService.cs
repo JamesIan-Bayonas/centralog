@@ -150,6 +150,17 @@ namespace CentraLog.Infrastructure.Services
                     asset.UpdatedAt = timestamp;
 
                     await _context.MaintenanceLogs.AddAsync(maintenanceLog, cancellationToken);
+                    await _context.AuditLogs.AddAsync(new AuditLog
+                    {
+                        AssetId = asset.Id,
+                        OldRoomId = asset.RoomId,
+                        NewRoomId = asset.RoomId,
+                        OldCustodianId = asset.CustodianId,
+                        NewCustodianId = asset.CustodianId,
+                        ModifiedByUserId = adminUserId,
+                        Timestamp = timestamp,
+                        ChangeSummary = "Maintenance started"
+                    }, cancellationToken);
                     await _context.SaveChangesAsync(cancellationToken);
                     await transaction.CommitAsync(cancellationToken);
                     return true;
@@ -284,7 +295,7 @@ namespace CentraLog.Infrastructure.Services
                     NewCustodianName = newCustodianName,
                     ModifiedByUserId = log.ModifiedByUserId,
                     OperatorUsername = operatorName ?? "System Automated Daemon",
-                    Timestamp = log.Timestamp,
+                    Timestamp = DateTime.SpecifyKind(log.Timestamp, DateTimeKind.Utc),
                     ChangeSummary = GetAuditChangeSummary(log)
                 });
             }
@@ -328,7 +339,7 @@ namespace CentraLog.Infrastructure.Services
                     NewCustodianName = GetCustodianName(log.NewCustodianId),
                     ModifiedByUserId = log.ModifiedByUserId,
                     OperatorUsername = operatorUsername ?? "System Automated Daemon",
-                    Timestamp = log.Timestamp,
+                    Timestamp = DateTime.SpecifyKind(log.Timestamp, DateTimeKind.Utc),
                     ChangeSummary = GetAuditChangeSummary(log)
                 };
             }).ToList();

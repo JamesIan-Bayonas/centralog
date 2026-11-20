@@ -1,7 +1,8 @@
 // centralog-ui/src/components/AssetDetailSidebar.tsx
 
 import React, { useState, useEffect, useRef } from 'react';
-import { assetApi, type Asset, type AssetHistoryDto, DepreciationMethodMap, LifecycleStateMap } from '../services/api';
+import { assetApi, assetApiEnriched, type Asset, type AssetHistoryDto, DepreciationMethodMap, LifecycleStateMap } from '../services/api';
+import { formatAuditTimestamp } from '../services/auditTimestamp';
 import { useAuth } from '../context/AuthContext';
 import { X, ShieldAlert, TrendingDown, Calendar, HardDrive, Settings, Trash2, History, Maximize2 } from 'lucide-react';
 import './AssetDetailSidebar.css';
@@ -33,6 +34,7 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
   const [timelineError, setTimelineError] = useState<string | null>(null);
   const drawerRef = useRef<HTMLElement>(null);
   const inspectedAssetId = asset?.id;
+  const canReadAuditLog = hasClearance(['Accountant', 'SystemAdmin']);
 
   useEffect(() => {
     if (inspectedAssetId == null) return;
@@ -46,23 +48,41 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
       setHistoryTimeline(null);
       return;
     }
+    let cancelled = false;
 
     const fetchAuditTimelineData = async () => {
       setIsTimelineLoading(true);
       setTimelineError(null);
       try {
-        const data = await assetApi.getAssetHistory(asset.id);
-        setHistoryTimeline(data);
-      } catch (err: any) {
-        console.warn(`Timeline lookup note for Asset #${asset.id}:`, err.message);
-        setTimelineError(err.message || 'No historical audit entries found.');
+        let data = await assetApi.getAssetHistory(asset.id);
+        if (cancelled) return;
+        if (canReadAuditLog && data.timelineEntries.some(entry => entry.changeSummary == null)) {
+          try {
+            // The older API includes summaries only in the role-restricted Audit log.
+            const auditEntries = await assetApiEnriched.getAuditLog();
+            const summaries = new Map(auditEntries
+              .filter(entry => entry.assetId === asset.id)
+              .map(entry => [entry.logId, entry.changeSummary]));
+            data = { ...data, timelineEntries: data.timelineEntries.map(entry => ({
+              ...entry, changeSummary: entry.changeSummary ?? summaries.get(entry.logId),
+            })) };
+          } catch {
+            // The asset history remains available when the report cannot be loaded.
+          }
+        }
+        if (!cancelled) setHistoryTimeline(data);
+      } catch (err) {
+        if (!cancelled) {
+          setTimelineError(err instanceof Error ? err.message : 'Unable to load asset history.');
+        }
       } finally {
-        setIsTimelineLoading(false);
+        if (!cancelled) setIsTimelineLoading(false);
       }
     };
 
     fetchAuditTimelineData();
-  }, [asset]);
+    return () => { cancelled = true; };
+  }, [asset, canReadAuditLog]);
 
   if (!asset) return null;
 
@@ -215,7 +235,7 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
               <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{timelineError}</span>
             )}
 
-            {!isTimelineLoading && !timelineError && historyTimeline && (
+            {!isTimelineLoading && !timelineError && historyTimeline?.assetId === asset.id && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', position: 'relative' }}>
                 {historyTimeline.timelineEntries.length === 0 ? (
                   <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>No changes have been recorded for this asset.</span>
@@ -224,7 +244,7 @@ export const AssetDetailSidebar: React.FC<AssetDetailSidebarProps> = ({
                     <div key={log.logId} style={{ borderLeft: '2px solid var(--accent)', paddingLeft: '12px', marginLeft: '4px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px' }}>
                         <span style={{ color: 'var(--clr-warning)', fontWeight: 600 }}>@{log.operatorUsername}</span>
-                        <span style={{ color: 'var(--text-muted)' }}>{new Date(log.timestamp).toLocaleString()}</span>
+                        <span style={{ color: 'var(--text-muted)' }}>{formatAuditTimestamp(log.timestamp)}</span>
                       </div>
                       <span style={{ fontSize: '12px', color: 'var(--text-primary)' }}>
                         {log.changeSummary?.trim() || 'Asset record changed'}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ClipboardList, ShieldAlert } from 'lucide-react';
 import { assetApiEnriched, type AuditLogEntryDto } from '../services/api';
+import { formatAuditTimestamp } from '../services/auditTimestamp';
 import { useAuth } from '../context/AuthContext';
 import './Reports.css';
 
@@ -106,7 +107,7 @@ export const AuditLogReport = () => {
 
               return (
                 <tr key={entry.logId}>
-                  <td className="mono">{new Date(entry.timestamp).toLocaleString()}</td>
+                  <td className="mono">{formatAuditTimestamp(entry.timestamp)}</td>
                   <td><strong>#{entry.assetId}</strong> {entry.assetName}</td>
                   <td>{entry.changeSummary}</td>
                   <td>{custodianChanged ? `${entry.oldCustodianName} → ${entry.newCustodianName}` : '—'}</td>

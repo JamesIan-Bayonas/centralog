@@ -1,10 +1,12 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { vi } from 'vitest';
 import App from '../../App';
+import { AssetDetailSidebar } from '../AssetDetailSidebar';
 import { AuditLogReport } from '../AuditLogReport';
 import { PropertyOverview } from '../PropertyOverview';
 import { useAuth } from '../../context/AuthContext';
 import { api, assetApi, assetApiEnriched, type Asset } from '../../services/api';
+import { formatAuditTimestamp } from '../../services/auditTimestamp';
 
 vi.mock('../../context/AuthContext', () => ({ useAuth: vi.fn() }));
 
@@ -102,6 +104,86 @@ describe('November partner QA fixes', () => {
     expect(drawer.queryByText(/verified\/decommissioned/)).not.toBeInTheDocument();
   });
 
+  it('uses the authorized Audit log to recover a missing summary by asset and log ID', async () => {
+    setRole('Accountant');
+    const timestamp = '2026-11-20T08:54:18';
+    vi.mocked(assetApi.getAssetHistory).mockResolvedValue({
+      assetId: asset.id, assetName: asset.name, timelineEntries: [
+        { ...maintenanceEvent, timestamp, changeSummary: undefined },
+      ]
+    });
+    const request = vi.spyOn(assetApiEnriched, 'getAuditLog').mockResolvedValue([
+      { ...maintenanceEvent, assetId: asset.id, assetName: asset.name, timestamp },
+      { ...maintenanceEvent, assetId: 99, assetName: 'Other asset', changeSummary: 'Unrelated event' },
+    ]);
+    render(<AssetDetailSidebar
+      asset={asset}
+      onClose={vi.fn()}
+      onActivateAsset={vi.fn()}
+      onInitiateMaintenance={vi.fn()}
+      onResolveMaintenance={vi.fn()}
+      onOpenOverview={vi.fn()}
+    />);
+    const drawer = within(screen.getByRole('dialog', { name: 'Asset details' }));
+    expect(await drawer.findByText('Maintenance resolved')).toBeInTheDocument();
+    expect(drawer.getByText(new Date(`${timestamp}Z`).toLocaleString())).toBeInTheDocument();
+    expect(drawer.queryByText('Unrelated event')).not.toBeInTheDocument();
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['2026-11-20T08:54:18', '2026-11-20T08:54:18Z', '2026-11-20T16:54:18+08:00'])(
+    'formats the same instant in local time for %s', timestamp => {
+      expect(formatAuditTimestamp(timestamp)).toBe(new Date('2026-11-20T08:54:18Z').toLocaleString());
+    }
+  );
+
+  it('refreshes the open drawer after successful maintenance actions and keeps state on a rejected start', async () => {
+    const active = { ...asset, lifecycleState: 2, isMaintenanceFlagged: true };
+    vi.mocked(api.get).mockImplementation(async url => ({ data: url.includes('summary') ? {
+      totalAssetCount: 1, totalSystemValue: 35000, activeCount: 1,
+      inMaintenanceCount: 0, urgentAlertCount: 1, disposedCount: 0
+    } : { items: [active] } }));
+    const history = vi.mocked(assetApi.getAssetHistory);
+    const startedEvent = { ...maintenanceEvent, logId: 2, changeSummary: 'Maintenance started' };
+    vi.spyOn(assetApiEnriched, 'initiateMaintenanceAction')
+      .mockRejectedValueOnce(new Error('Start rejected by server'))
+      .mockImplementationOnce(async () => {
+        history.mockResolvedValue({ assetId: active.id, assetName: active.name, timelineEntries: [startedEvent] });
+        return { message: 'Started' };
+      });
+    vi.spyOn(assetApiEnriched, 'resolveMaintenanceAction').mockImplementation(async () => {
+      history.mockResolvedValue({ assetId: active.id, assetName: active.name, timelineEntries: [maintenanceEvent, startedEvent] });
+      return { message: 'Resolved' };
+    });
+
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: active.name }));
+    const drawer = within(screen.getByRole('dialog', { name: 'Asset details' }));
+    await drawer.findByText('No changes have been recorded for this asset.');
+    fireEvent.click(drawer.getByRole('button', { name: 'Start maintenance' }));
+    await screen.findByText(/Start rejected by server/);
+    expect(drawer.queryByRole('button', { name: 'Complete maintenance' })).not.toBeInTheDocument();
+
+    fireEvent.click(drawer.getByRole('button', { name: 'Start maintenance' }));
+    expect(await drawer.findByText('Maintenance started')).toBeInTheDocument();
+    fireEvent.click(drawer.getByRole('button', { name: 'Complete maintenance' }));
+    expect(await drawer.findByText('Maintenance resolved')).toBeInTheDocument();
+    expect(drawer.getByRole('button', { name: 'Start maintenance' })).toBeInTheDocument();
+  });
+
+  it('keeps maintenance events out of the property Transfer History tab', async () => {
+    vi.mocked(assetApiEnriched.getAssetHistory).mockResolvedValue({
+      assetId: asset.id, assetName: asset.name, timelineEntries: [
+        maintenanceEvent,
+        { ...maintenanceEvent, logId: 2, oldRoomId: 101, newRoomId: 202, newRoomName: 'Server room' },
+      ]
+    });
+    render(<PropertyOverview assetId={asset.id} onBack={vi.fn()} />);
+    const panel = await screen.findByRole('tabpanel');
+    expect(within(panel).getByText('Transferred from Admin office to Server room')).toBeInTheDocument();
+    expect(within(panel).queryByText('Transferred from Admin office to Admin office')).not.toBeInTheDocument();
+  });
+
   it('filters audit entries by name or exact ID and restores the original order on clear', async () => {
     setRole('Accountant');
     const request = vi.spyOn(assetApiEnriched, 'getAuditLog').mockResolvedValue([
@@ -111,6 +193,7 @@ describe('November partner QA fixes', () => {
     ]);
     render(<AuditLogReport />);
     const search = await screen.findByRole('searchbox', { name: 'Search by asset name or ID' });
+    expect(screen.getAllByText(new Date(maintenanceEvent.timestamp).toLocaleString()).length).toBe(3);
     const assetCells = () => screen.getAllByRole('row').slice(1).map(row => within(row).getAllByRole('cell')[1]?.textContent);
     const originalOrder = assetCells();
     expect(originalOrder).toEqual(['#30 Printer Epson', '#130 Projector 30', '#30 Printer Epson']);

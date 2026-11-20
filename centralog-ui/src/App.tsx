@@ -197,7 +197,10 @@ function App() {
         issueDescription: "Threshold alert tripped. Transferred automatically to diagnostic calibration loop.",
         isUrgent: true
       });
-      
+
+      setActiveInspectedAsset(prev => prev?.id === assetId
+        ? { ...prev, lifecycleState: 3, isMaintenanceFlagged: false }
+        : prev);
       setActionFeedback(response.message);
       await loadDashboardMetrics();
       await loadAssetsList(searchTerm);
@@ -213,7 +216,10 @@ function App() {
         repairCost: 0.00,
         targetState: 2
       });
-      
+
+      setActiveInspectedAsset(prev => prev?.id === assetId
+        ? { ...prev, lifecycleState: 2, isMaintenanceFlagged: false }
+        : prev);
       setActionFeedback(response.message);
       await loadDashboardMetrics();
       await loadAssetsList(searchTerm);
@@ -839,14 +845,8 @@ function App() {
           await handleActivateAsset(id);
           setActiveInspectedAsset(prev => prev ? { ...prev, lifecycleState: 2 } : null);
         }}
-        onInitiateMaintenance={async (id) => {
-          await handleInitiateMaintenance(id);
-          setActiveInspectedAsset(prev => prev ? { ...prev, lifecycleState: 3 } : null);
-        }}
-        onResolveMaintenance={async (id) => {
-          await handleResolveMaintenance(id);
-          setActiveInspectedAsset(prev => prev ? { ...prev, lifecycleState: 2, isMaintenanceFlagged: false } : null);
-        }}
+        onInitiateMaintenance={handleInitiateMaintenance}
+        onResolveMaintenance={handleResolveMaintenance}
         onOpenOverview={(id) => {
           setActiveInspectedAsset(null);
           setActiveOverviewAssetId(id);
